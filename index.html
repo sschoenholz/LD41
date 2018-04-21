@@ -1,0 +1,717 @@
+﻿<!DOCTYPE html>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.12.0/jquery.min.js"></script>
+<link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+<style>
+    * {
+        font-family: sans-serif;
+        font-size: 14px;
+    }
+
+    html, body {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        z-index: 1;
+    }
+
+    h1 {
+        font-family: "Montserrat", sans-serif;
+        font-size: 32px;
+        margin: 1%;
+        text-shadow: 3px 3px #000000;
+    }
+    
+    h2 {
+        font-family: "Montserrat", sans-serif;
+        font-size: 24px;
+        margin: 1%;
+        text-shadow: 3px 3px #000000;
+    }
+
+    #score-container {
+        position: absolute;
+        width: 200px;
+        background: none;
+        color: #FFFFFF;
+        border: #FFFFFF;
+        margin: 10px;
+        padding: 10px;
+        z-index: 2;
+    }
+
+    #score {
+        position: absolute;
+        width: 200px;
+        background: none;
+        color: #FFFFFF;
+        border: #FFFFFF;
+        border-style: dashed;
+        margin: 0px;
+        padding: 0px;
+        z-index: 2;
+    }
+
+
+</style>
+
+
+<head>
+    <meta charset="utf-8" />
+    <title>Asteroids RTS</title>
+</head>
+
+<body oncontextmenu="return false">
+
+    <div id="score-container">
+        <div id="score"><h1>$ 0</h1></div>
+    </div>
+
+    <canvas id="cvs"></canvas>
+
+    <script type="text/javascript">
+
+        document.onmousedown = disable_click;
+
+        function disable_click(event) {
+            if (event.button == 2) {
+                return false;
+            }
+        }
+
+        var game_width = window.innerWidth;
+        var game_height = window.innerHeight;
+        var game_score = 0;
+        
+        var canvas = document.getElementById("cvs");
+        canvas.width = game_width;
+        canvas.height = game_height;
+
+        canvas.oncontextmenu = function () { return false;}
+
+        var graphics = canvas.getContext("2d");
+
+        var render_frame_rate = 1000.0 / 60.0;
+
+        var last_frame = (new Date().getTime());
+
+        window.requestAnimFrame = (function () {
+            return window.requestAnimationFrame ||
+                window.webkitRequestAnimationFrame ||
+                window.mozRequestAnimationFrame ||
+                function (callback) {
+                    window.setTimeout(callback, render_frame_rate);
+                };
+        })();
+
+        function game_loop() {
+            requestAnimFrame(game_loop);
+
+            dt = (new Date()).getTime() - last_frame;
+            last_frame = (new Date()).getTime();
+
+            draw_game();
+            update_game(dt);
+
+            handle_input();
+        };
+
+        /* IO CODE */
+        var mouse = {
+            x: 0.0,
+            y: 0.0,
+            down_x: 0.0,
+            down_y: 0.0,
+            is_down: -1,
+            is_clicked: -1,
+            down_time: -1,
+            click_time_left: 135,
+            click_time_right: 200,
+        };
+
+        canvas.addEventListener(
+            "mousemove",
+            function (input) {
+                mouse.x = input.x;
+                mouse.y = input.y;
+            }, false);
+
+        canvas.addEventListener(
+            "mousedown",
+            function (input) {
+                mouse.is_down = input.button;
+                mouse.down_time = (new Date()).getTime();
+                mouse.down_x = mouse.x;
+                mouse.down_y = mouse.y;
+            }, false);
+
+        canvas.addEventListener(
+            "mouseup",
+            function (input) {
+                if (mouse.is_down == 0 && (new Date()).getTime() - mouse.down_time < mouse.click_time_left)
+                    mouse.is_clicked = mouse.is_down;
+
+                if (mouse.is_down == 2 && (new Date()).getTime() - mouse.down_time < mouse.click_time_right)
+                    mouse.is_clicked = mouse.is_down;
+
+                mouse.is_down = -1;
+                mouse.down_time = -1;
+            }, false);
+
+        /* SHIP CODE */
+        var ship_graphic = new Image();
+        var ship_graphic_loaded = false;
+        ship_graphic.src = "graphics/ship.svg";
+        ship_graphic.radius = -1;
+        ship_graphic.addEventListener(
+            "load",
+            function () {
+                ship_graphic_loaded = true;
+                ship_graphic.radius = Math.sqrt(ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
+            }
+        );
+
+        function draw_ship(ship) {
+            var color = "#1ef9de";
+            var size = 20.0;
+
+            graphics.save();
+
+            graphics.translate(ship.x, ship.y);
+            graphics.rotate(ship.angle);
+
+            if (ship_graphic_loaded) 
+                graphics.drawImage(ship_graphic, -ship_graphic.width/2.0, -ship_graphic.height/2.0);
+
+            graphics.restore();
+        }
+
+        function draw_ship_selector(ship, ship_selector) {
+            var color = "#FFFFFF";
+            var size = 10.0;
+
+            graphics.save();
+
+            graphics.translate(ship.x, ship.y);
+
+            graphics.strokeStyle = color;
+            graphics.lineWidth = 2;
+
+            graphics.beginPath();
+
+            graphics.moveTo(-ship_graphic.width / 2.0, -ship_graphic.height / 2.0 + size);
+            graphics.lineTo(-ship_graphic.width / 2.0, -ship_graphic.height / 2.0);
+            graphics.lineTo(-ship_graphic.width / 2.0 + size, -ship_graphic.height / 2.0);
+
+            graphics.moveTo(ship_graphic.width / 2.0, -ship_graphic.height / 2.0 + size);
+            graphics.lineTo(ship_graphic.width / 2.0, -ship_graphic.height / 2.0);
+            graphics.lineTo(ship_graphic.width / 2.0 - size, -ship_graphic.height / 2.0);
+
+            graphics.moveTo(ship_graphic.width / 2.0, ship_graphic.height / 2.0 - size);
+            graphics.lineTo(ship_graphic.width / 2.0, ship_graphic.height / 2.0);
+            graphics.lineTo(ship_graphic.width / 2.0 - size, ship_graphic.height / 2.0);
+
+            graphics.moveTo(-ship_graphic.width / 2.0, ship_graphic.height / 2.0 - size);
+            graphics.lineTo(-ship_graphic.width / 2.0, ship_graphic.height / 2.0);
+            graphics.lineTo(-ship_graphic.width / 2.0 + size, ship_graphic.height / 2.0);
+
+            graphics.stroke();
+
+            graphics.restore();
+        }
+
+
+        var selected_ships = [];
+        var ships = [];
+
+        for (var i = 0; i < 5; i++) {
+            ships.push(
+                {
+                    x: game_width / 2.0 + 200 * Math.random() - 100.0,
+                    y: game_height / 2.0 + 200 * Math.random() - 100.0,
+                    angle: 0.0,
+                    target: { x: 0, y: 0, active: false, command_id: 0 },
+                    last_fired: (new Date()).getTime()
+                }
+            );
+        }
+
+        /* ASTEROID CODE */
+        function draw_asteroid(asteroid) {
+            var color = "#AAAAAA";
+
+            graphics.lineWidth = 4;
+            graphics.strokeStyle = color;
+
+            graphics.save();
+
+            graphics.translate(asteroid.x, asteroid.y);
+            graphics.rotate(asteroid.angle);
+
+            graphics.beginPath();
+            graphics.moveTo(asteroid.vertices[0].x, asteroid.vertices[0].y);
+
+            for (var i = 0; i < asteroid.vertices.length ; i++) {
+                graphics.lineTo(asteroid.vertices[i].x, asteroid.vertices[i].y);
+            }
+
+            graphics.lineTo(asteroid.vertices[0].x, asteroid.vertices[0].y);
+
+            graphics.stroke();
+
+            graphics.restore();
+        }
+
+        function point_in_asteroid(x, y, asteroid) {
+            var intersections = 0;
+
+            var c_theta = Math.cos(asteroid.angle);
+            var s_theta = Math.sin(asteroid.angle);
+
+            var v_old = {
+                x: asteroid.x + c_theta * asteroid.vertices[0].x - s_theta * asteroid.vertices[0].y,
+                y: asteroid.y + s_theta * asteroid.vertices[0].x + c_theta * asteroid.vertices[0].y
+            }
+
+            for (var i = 1; i <= asteroid.vertices.length; i++) {
+                var index = i % asteroid.vertices.length;
+
+                var v = {
+                    x: asteroid.x + c_theta * asteroid.vertices[index].x - s_theta * asteroid.vertices[index].y,
+                    y: asteroid.y + s_theta * asteroid.vertices[index].x + c_theta * asteroid.vertices[index].y
+                }
+
+                var t_2 = (y - v_old.y) / (v.y - v_old.y);
+                var t_1 = -(x - v_old.x) + t_2 * (v.x - v_old.x);
+
+                v_old = v;
+
+                if (t_2 < 0 || t_2 > 1)
+                    continue;
+
+                if (t_1 >= 0)
+                    intersections++;
+            }
+
+            return intersections % 2 == 1;
+        }
+
+        // NOTE(schsam): For now we will do asteroid-disk collision, but this
+        // might not be great. If so, we can implement different kinds of
+        // collision for different kinds of objects separately.
+        function ship_asteroid_intersection(ship, asteroid) {
+            var c_theta = Math.cos(asteroid.angle);
+            var s_theta = Math.sin(asteroid.angle);
+
+            var v_old = {
+                x: asteroid.x + c_theta * asteroid.vertices[0].x - s_theta * asteroid.vertices[0].y,
+                y: asteroid.y + s_theta * asteroid.vertices[0].x + c_theta * asteroid.vertices[0].y
+            }
+
+            var r_sqr = ship_graphic.radius * ship_graphic.radius;
+
+            for (var i = 1; i <= asteroid.vertices.length; i++) {
+                var index = i % asteroid.vertices.length;
+
+                var v = {
+                    x: asteroid.x + c_theta * asteroid.vertices[index].x - s_theta * asteroid.vertices[index].y,
+                    y: asteroid.y + s_theta * asteroid.vertices[index].x + c_theta * asteroid.vertices[index].y
+                }
+
+                //l = l_0 + t(l_1 - l_0).
+                //(l - r)^2 = R^2
+                //(l_0 - r)^2 + 2t(l_1 - l_0).(l_0 - r) + t^2(l_1 - l_0)^2 - R^2 = 0
+                var a = (v.x - v_old.x) * (v.x - v_old.x) + (v.y - v_old.y) * (v.y - v_old.y);
+                var b = 2 * ((v.x - v_old.x) * (v_old.x - ship.x) + (v.y - v_old.y) * (v_old.y - ship.y));
+                var c = (ship.x - v_old.x) * (ship.x - v_old.x) + (ship.y - v_old.y) * (ship.y - v_old.y) - r_sqr;
+
+                var disc = (b * b - 4 * a * c);
+
+                if (disc <= 0)
+                    continue;
+
+                var t_1 = (-b + Math.sqrt(disc)) / (2 * a);
+                var t_2 = (-b - Math.sqrt(disc)) / (2 * a);
+
+                v_old = v;
+
+                if ((t_1 < 0 || t_1 > 1) && (t_2 < 0 || t_2 > 1))
+                    continue;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        function create_asteroid(position, size) {
+            var vertices = [];
+            var angle = 0.0;
+            var d_angle_scale = 0.5;
+            var d_radius_scale = 0.5;
+            
+            while (angle < 2 * Math.PI) {
+                angle += 0.2 + d_angle_scale * Math.random();
+
+                if (angle > 2 * Math.PI)
+                    break;
+
+                var radius = size + d_radius_scale * size * (Math.random() - 0.5);
+
+                vertices.push({
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(angle) * radius
+                });
+            }
+
+            asteroids.push(
+                {
+                    x: position.x, y: position.y,
+                    angle: 0.0,
+                    vx: velocity_scale * (Math.random() - 0.5),
+                    vy: velocity_scale * (Math.random() - 0.5),
+                    omega: omega_scale * (Math.random() - 0.5),
+                    vertices: vertices,
+                    size: size,
+                    health: size
+                });
+        }
+
+        var asteroids = [];
+
+        var velocity_scale = 0.2;
+        var omega_scale = 0.005;
+
+        for (var i = 0; i < 1; i++) {
+
+            var position = {
+                x: game_width * Math.random(),
+                y: game_height * Math.random()
+            };
+
+            var base_radius = 100 + Math.random() * 60;
+
+            create_asteroid(position, base_radius);
+        }
+
+        // BULLETS
+        var bullet_graphic = new Image();
+        var bullet_graphic_loaded = false;
+        bullet_graphic.src = "graphics/bullet.svg";
+        bullet_graphic.radius = -1;
+        bullet_graphic.addEventListener(
+            "load",
+            function () {
+                bullet_graphic_loaded = true;
+                bullet_graphic.radius = Math.sqrt(bullet_graphic.width * bullet_graphic.width + bullet_graphic.height * bullet_graphic.height) / 2.0;
+            }
+        );
+
+        function draw_bullet(bullet) {
+            var color = "#1ef9de";
+            var size = 20.0;
+
+            graphics.save();
+
+            graphics.translate(bullet.x, bullet.y);
+
+            if (bullet_graphic_loaded)
+                graphics.drawImage(bullet_graphic, -bullet_graphic.width / 2.0, -bullet_graphic.height / 2.0);
+
+            graphics.restore();
+
+        }
+
+        bullets = [];
+
+        /* RENDER / UPDATE CODE */
+        function draw_game() {
+            graphics.setTransform(1, 0, 0, 1, 0, 0);
+
+            graphics.fillStyle = "#2e2e2e";
+
+            graphics.fillRect(0, 0, game_width, game_height);
+
+            for (var i = 0; i < ships.length; i++) {
+                draw_ship(ships[i]);
+            }
+
+            for (var i = 0; i < selected_ships.length; i++) {
+                var id = selected_ships[i].id;
+
+                draw_ship_selector(ships[id], selected_ships[i]);
+            }
+
+            for (var i = 0; i < asteroids.length; i++) {
+                draw_asteroid(asteroids[i]);
+            }
+
+            for (var i = 0; i < bullets.length; i++) {
+                draw_bullet(bullets[i]);
+            }
+        }
+
+        function update_game(dt) {
+            var ship_fire_rate = 200;
+            var ship_speed = 0.3;
+            var min_ship_to_target = 5.0;
+            var ship_attack_range = 400;
+            var bullet_speed = 0.5;
+
+            // SHIP TO TARGET LOGIC
+            for (var i = 0; i < ships.length; i++) {
+                if (ships[i].target.active && ships[i].target.mode == "move") {
+                    var dx = ships[i].target.x - ships[i].x;
+                    var dy = ships[i].target.y - ships[i].y;
+
+                    var norm = Math.sqrt(dx * dx + dy * dy);
+
+                    if (norm < ship_speed * dt)
+                        norm = ship_speed * dt;
+
+                    if (norm < min_ship_to_target) {
+                        ships[i].target.active = false;
+                    } else {
+                        ships[i].x += dx / norm * ship_speed * dt;
+                        ships[i].y += dy / norm * ship_speed * dt;
+                        ships[i].angle = Math.atan2(dy, dx) + Math.PI/2.0;
+                    }
+                }
+
+                if (ships[i].target.active && ships[i].target.mode == "attack") {
+                    var target = asteroids[ships[i].target.asteroid];
+
+                    var dx = target.x - ships[i].x;
+                    var dy = target.y - ships[i].y;
+
+                    var norm = Math.sqrt(dx * dx + dy * dy);
+
+                    if (norm > ship_attack_range) {
+                        ships[i].x += dx / norm * ship_speed * dt;
+                        ships[i].y += dy / norm * ship_speed * dt;
+                        ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
+                    } else {
+                        ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
+
+                        if ((new Date()).getTime() - ships[i].last_fired > ship_fire_rate) {
+                            bullets.push({
+                                x: ships[i].x + ship_graphic.radius * dx / norm,
+                                y: ships[i].y + ship_graphic.radius * dy / norm,
+                                vx: dx / norm * bullet_speed,
+                                vy: dy / norm * bullet_speed,
+                                fire_time: (new Date()).getTime()
+                            });
+
+                            ships[i].last_fired = (new Date()).getTime();
+                        }
+                    }
+                }
+            }
+
+            // SHIP SHIP OVERLAP
+            var ship_repulsion_scale = 1.0;
+            var goal_separation_radius = ship_graphic.radius * 3;
+
+            for (var i = 0; i < ships.length; i++) {
+                for (var j = i + 1; j < ships.length; j++) {
+                    var dx = ships[i].x - ships[j].x;
+                    var dy = ships[i].y - ships[j].y;
+
+                    var norm = Math.sqrt(dx * dx + dy * dy);
+
+                    if (norm < goal_separation_radius) {
+                        ships[i].x += (1.0 - norm / goal_separation_radius) * dx / norm * dt * ship_repulsion_scale;
+                        ships[i].y += (1.0 - norm / goal_separation_radius) * dx / norm * dt * ship_repulsion_scale;
+                        ships[j].x -= (1.0 - norm / goal_separation_radius) * dx / norm * dt * ship_repulsion_scale;
+                        ships[j].y -= (1.0 - norm / goal_separation_radius) * dy / norm * dt * ship_repulsion_scale;
+
+                        if (ships[i].target.mode == "move" && ships[i].target.command_id == ships[j].target.command_id) {
+                            ships[i].target.active = ships[i].target.active && ships[j].target.active;
+                            ships[j].target.active = ships[i].target.active && ships[j].target.active;
+                        }
+                    }
+                }
+            }
+
+            // SHIP ASTEROID OVERLAP
+            for (var i = 0; i < ships.length; i++) {
+                for (var j = 0; j < asteroids.length; j++) {
+                    if (ship_asteroid_intersection(ships[i], asteroids[j])) {
+
+                        for (var k = 0; k < selected_ships.length; k++) {
+                            if (selected_ships[k].id == i)
+                                selected_ships.splice(k);
+                            if (selected_ships[k].id > i)
+                                selected_ships[k].id--;
+                        }
+
+                        ships.splice(i, 1);
+
+                        break;
+                    }
+                }
+            }
+
+            // ASTEROID DYNAMICS 
+            for (var i = 0; i < asteroids.length; i++) {
+                asteroids[i].x += dt * asteroids[i].vx;
+                asteroids[i].y += dt * asteroids[i].vy;
+
+                if (asteroids[i].x > game_width)
+                    asteroids[i].x -= game_width;
+                if (asteroids[i].y > game_height)
+                    asteroids[i].y -= game_height;
+                if (asteroids[i].x < 0)
+                    asteroids[i].x += game_width;
+                if (asteroids[i].y < 0)
+                    asteroids[i].y += game_height;
+
+                asteroids[i].angle += dt * asteroids[i].omega;
+            }
+            
+
+            // BULLET DYNAMICS
+            var bullet_damage = 1;
+            var minimum_asteroid_radius = 80;
+            var bullet_duration = 3000;
+
+            for (var i = 0; i < bullets.length; i++) {
+                bullets[i].x += bullets[i].vx * dt;
+                bullets[i].y += bullets[i].vy * dt;
+
+                if (bullets[i].x > game_width)
+                    bullets[i].x -= game_width;
+                if (bullets[i].y > game_height)
+                    bullets[i].y -= game_height;
+                if (bullets[i].x < 0)
+                    bullets[i].x += game_width;
+                if (bullets[i].y < 0)
+                    bullets[i].y += game_height;
+
+                if ((new Date()).getTime() - bullets[i].fire_time > bullet_duration) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                for (var j = 0; j < asteroids.length; j++) {
+                    if (point_in_asteroid(bullets[i].x, bullets[i].y, asteroids[j])) {
+                        bullets.splice(i, 1);
+
+                        asteroids[j].health -= bullet_damage;
+
+                        if (asteroids[j].health < 0) {
+                            for (var z = 0; z < ships.length; z++)
+                                if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.asteroid == j)
+                                    ships[z].target.active = false;
+
+                            var asteroid_radius = asteroids[j].size;
+                            var pos = { x: asteroids[j].x, y: asteroids[j].y };
+                            asteroids.splice(j, 1);
+
+                            if (asteroid_radius > minimum_asteroid_radius) {
+                                for (var i = 0; i < 4; i++) {
+                                    create_asteroid(pos, asteroid_radius / 1.25);
+                                }
+                            }
+
+                            game_score += Math.floor(asteroid_radius);
+
+                            document.getElementById("score").innerHTML = "<h1>$ " + game_score + "</h1>";
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+
+        var command_count = 0;
+        var selected_ships = [];
+
+        function handle_input() {
+            var ship_select_radius = Math.sqrt(ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
+
+            if (mouse.is_clicked == 0) {
+                selected_ships = [];
+
+                for (var i = 0; i < ships.length; i++) {
+                    var dx = ships[i].x - mouse.x;
+                    var dy = ships[i].y - mouse.y;
+
+                    if (dx * dx + dy * dy < ship_select_radius * ship_select_radius) 
+                        selected_ships.push({ id: i });
+                }
+            }
+
+            if (mouse.is_down == 0) {
+                selected_ships = []
+
+                var min_mouse_x = Math.min(mouse.x, mouse.down_x);
+                var min_mouse_y = Math.min(mouse.y, mouse.down_y);
+
+                var max_mouse_x = Math.max(mouse.x, mouse.down_x);
+                var max_mouse_y = Math.max(mouse.y, mouse.down_y);
+
+                for (var i = 0; i < ships.length; i++) {
+                    if (ships[i].x > min_mouse_x && ships[i].x < max_mouse_x &&
+                        ships[i].y > min_mouse_y && ships[i].y < max_mouse_y)
+                        selected_ships.push({ id: i });
+                }
+
+                graphics.beginPath();
+
+                graphics.fillStyle = "#0000FF"
+                graphics.globalAlpha = 0.2;
+
+                graphics.fillRect(
+                    min_mouse_x,
+                    min_mouse_y,
+                    max_mouse_x - min_mouse_x,
+                    max_mouse_y - min_mouse_y);
+
+                graphics.globalAlpha = 1.0
+            }
+
+            if (mouse.is_clicked == 2 && selected_ships.length > 0) {
+
+                var selected_asteroid = -1;
+
+                for (var i = 0; i < asteroids.length; i++) {
+                    if (point_in_asteroid(mouse.x, mouse.y, asteroids[i]))
+                        selected_asteroid = i;
+                }
+
+                for (var i = 0; i < selected_ships.length; i++) {
+                    if (selected_asteroid < 0) {
+                        ships[selected_ships[i].id].target = {
+                            x: mouse.x, y: mouse.y,
+                            active: true, command_id: command_count,
+                            mode: "move"
+                        };
+                    } else {
+                        ships[selected_ships[i].id].target = {
+                            asteroid: selected_asteroid,
+                            active: true, command_id: command_count,
+                            mode: "attack"
+                        };
+                    }
+                }
+
+                command_count++;
+            }
+
+            mouse.is_clicked = -1;
+        } 
+
+        game_loop();
+    </script>
+</bodyoncontextmenu="return>
