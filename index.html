@@ -47,6 +47,7 @@
         margin: 10px;
         padding: 10px;
         z-index: 2;
+        pointer-events: none;
     }
 
     #score {
@@ -136,13 +137,37 @@
             down_time: -1,
             click_time_left: 135,
             click_time_right: 200,
+            mode: "select",
+            is_locked: false
         };
+
+        mouse.selected_image = new Image();
+        mouse.selected_image.src = "graphics/mouse_select.svg";
+
+        mouse.attack_image = new Image();
+        mouse.attack_image.src = "graphics/mouse_attack.svg";
 
         canvas.addEventListener(
             "mousemove",
             function (input) {
-                mouse.x = input.x;
-                mouse.y = input.y;
+                if (mouse.is_locked) {
+                    mouse.x += input.movementX;
+                    mouse.y += input.movementY;
+
+                    if (mouse.x > game_width)
+                        mouse.x = game_width;
+                    if (mouse.x < 0)
+                        mouse.x = 0;
+
+                    if (mouse.y > game_height)
+                        mouse.y = game_height;
+                    if (mouse.y < 0)
+                        mouse.y = 0;
+
+                } else {
+                    mouse.x = input.x;
+                    mouse.y = input.y;
+                }
             }, false);
 
         canvas.addEventListener(
@@ -157,14 +182,84 @@
         canvas.addEventListener(
             "mouseup",
             function (input) {
-                if (mouse.is_down == 0 && (new Date()).getTime() - mouse.down_time < mouse.click_time_left)
+                var dist_sq = (mouse.x - mouse.down_x) * (mouse.x - mouse.down_x) + (mouse.y - mouse.down_y) * (mouse.y - mouse.down_y);
+                var min_click_distance = 40 * 40;
+
+                if (mouse.is_down == 0 && dist_sq < min_click_distance)
                     mouse.is_clicked = mouse.is_down;
 
-                if (mouse.is_down == 2 && (new Date()).getTime() - mouse.down_time < mouse.click_time_right)
+                if (mouse.is_down == 2)
                     mouse.is_clicked = mouse.is_down;
 
                 mouse.is_down = -1;
                 mouse.down_time = -1;
+            }, false);
+
+        canvas.onclick = function () {
+            if (!mouse.is_locked) {
+                canvas.request_pointer_lock =
+                    canvas.requestPointerLock ||
+                    canvas.mozRequestPointerLock ||
+                    canvas.webkitRequestPointerLock;
+                canvas.request_pointer_lock();
+            }
+        }
+        
+        document.addEventListener("pointerlockchange", pointer_lock_change, false);
+        document.addEventListener("mozpointerlockchange", pointer_lock_change, false);
+        document.addEventListener("webkitpointerlockchange", pointer_lock_change, false);
+
+        function pointer_lock_change(e) {
+            if (document.pointerLockElement == canvas ||
+                document.mosPointerLockElement == canvas ||
+                document.webkitPointerLockElement == canvas) {
+
+                canvas.onclick = null;
+                mouse.is_locked = true;
+            } else {
+                canvas.onclick = function () {
+                    if (!mouse.is_locked) {
+                        canvas.request_pointer_lock =
+                            canvas.requestPointerLock ||
+                            canvas.mozRequestPointerLock ||
+                            canvas.webkitRequestPointerLock;
+                        canvas.request_pointer_lock();
+                    }
+                }
+
+                mouse.is_locked = false;
+            }
+        }
+
+        function draw_mouse() {
+            graphics.save();
+
+            graphics.translate(mouse.x, mouse.y);
+
+            if (mouse.mode == "select")
+                graphics.drawImage(mouse.selected_image, 0, 0);
+            else if (mouse.mode == "attack")
+                graphics.drawImage(mouse.attack_image, -mouse.attack_image.width / 2.0, -mouse.attack_image.height / 2.0);
+
+            graphics.restore();
+        }
+
+        keyboard = {ATTACK_KEY: 65};
+
+        document.body.addEventListener(
+            "keydown",
+            function (input) {
+                keyboard[input.keyCode] = true;
+
+                if (input.keyCode == keyboard.ATTACK_KEY && selected_ships.length > 0)
+                    mouse.mode = "attack";
+
+            }, false);
+
+        document.body.addEventListener(
+            "keyup",
+            function (input) {
+                delete keyboard[input.keyCode];
             }, false);
 
         /* SHIP CODE */
@@ -458,6 +553,9 @@
             for (var i = 0; i < bullets.length; i++) {
                 draw_bullet(bullets[i]);
             }
+
+            if(mouse.is_locked)
+                draw_mouse();
         }
 
         function update_game(dt) {
@@ -473,6 +571,11 @@
                     var dx = ships[i].target.x - ships[i].x;
                     var dy = ships[i].target.y - ships[i].y;
 
+                    if (Math.abs(dx) > game_width / 2.0)
+                        dx -= Math.sign(dx) * game_width;
+                    if (Math.abs(dy) > game_height / 2.0)
+                        dy -= Math.sign(dy) * game_height;
+
                     var norm = Math.sqrt(dx * dx + dy * dy);
 
                     if (norm < ship_speed * dt)
@@ -483,6 +586,16 @@
                     } else {
                         ships[i].x += dx / norm * ship_speed * dt;
                         ships[i].y += dy / norm * ship_speed * dt;
+
+                        if (ships[i].x > game_width)
+                            ships[i].x -= game_width;
+                        if (ships[i].x < 0)
+                            ships[i].x += game_width;
+                        if (ships[i].y > game_height)
+                            ships[i].y -= game_height;
+                        if (ships[i].y < 0)
+                            ships[i].y += game_height;
+
                         ships[i].angle = Math.atan2(dy, dx) + Math.PI/2.0;
                     }
                 }
@@ -493,11 +606,26 @@
                     var dx = target.x - ships[i].x;
                     var dy = target.y - ships[i].y;
 
+                    if (Math.abs(dx) > game_width / 2.0)
+                        dx -= Math.sign(dx) * game_width;
+                    if (Math.abs(dy) > game_height / 2.0)
+                        dy -= Math.sign(dy) * game_height;
+
                     var norm = Math.sqrt(dx * dx + dy * dy);
 
                     if (norm > ship_attack_range) {
                         ships[i].x += dx / norm * ship_speed * dt;
                         ships[i].y += dy / norm * ship_speed * dt;
+
+                        if (ships[i].x > game_width)
+                            ships[i].x -= game_width;
+                        if (ships[i].x < 0)
+                            ships[i].x += game_width;
+                        if (ships[i].y > game_height)
+                            ships[i].y -= game_height;
+                        if (ships[i].y < 0)
+                            ships[i].y += game_height;
+
                         ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
                     } else {
                         ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
@@ -547,12 +675,17 @@
                 for (var j = 0; j < asteroids.length; j++) {
                     if (ship_asteroid_intersection(ships[i], asteroids[j])) {
 
+                        var selected_index = -1;
+
                         for (var k = 0; k < selected_ships.length; k++) {
                             if (selected_ships[k].id == i)
-                                selected_ships.splice(k);
+                                selected_index = k;
                             if (selected_ships[k].id > i)
                                 selected_ships[k].id--;
                         }
+
+                        if (selected_index >= 0)
+                            selected_ships.splice(selected_index, 1);
 
                         ships.splice(i, 1);
 
@@ -640,7 +773,7 @@
         function handle_input() {
             var ship_select_radius = Math.sqrt(ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
 
-            if (mouse.is_clicked == 0) {
+            if (mouse.is_clicked == 0 && mouse.mode == "select") {
                 selected_ships = [];
 
                 for (var i = 0; i < ships.length; i++) {
@@ -650,6 +783,10 @@
                     if (dx * dx + dy * dy < ship_select_radius * ship_select_radius) 
                         selected_ships.push({ id: i });
                 }
+            }
+
+            if (mouse.is_clicked == 0 && mouse.mode == "attack") {
+
             }
 
             if (mouse.is_down == 0) {
@@ -681,7 +818,7 @@
                 graphics.globalAlpha = 1.0
             }
 
-            if (mouse.is_clicked == 2 && selected_ships.length > 0) {
+            if (mouse.is_clicked == 2 && selected_ships.length > 0 && mouse.mode == "select") {
 
                 var selected_asteroid = -1;
 
@@ -705,6 +842,8 @@
                         };
                     }
                 }
+
+                mouse.mode = "select";
 
                 command_count++;
             }
