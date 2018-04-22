@@ -95,7 +95,7 @@
         background: #181818;
         color: #EEEEEE;
         border: none;
-        transform: translate(-50%,0);
+        transform: translate(-50%,-50%);
         padding: 0;
         z-index: 3;
         pointer-events: none;
@@ -110,6 +110,32 @@
         border: none;
         padding: 25px;
         z-index: 3;
+        transform: translate(0%, -50%);
+        pointer-events: none;
+    }
+
+    #death-screen {
+        position: absolute;
+        margin: 25% 50%;
+        width: 700px;
+        background: #181818;
+        color: #EEEEEE;
+        border: none;
+        transform: translate(-50%,-50%);
+        padding: 20px;
+        z-index: 3;
+    }
+
+    #high-score-screen {
+        position: absolute;
+        margin: 25% 100%;
+        width: 250px;
+        background: #181818;
+        color: #EEEEEE;
+        border: none;
+        padding: 25px;
+        z-index: 3;
+        transform: translate(-100%, -50%);
         pointer-events: none;
     }
 
@@ -126,12 +152,22 @@
         pointer-events: none;
     }
 
+    .row {
+        display: flex;
+    }
+
+    .column {
+        flex: 50%;
+        padding: 10px;
+    }
+
     .gameMenuButton {
         background-color: #003fb6;
         text-shadow: 3px 3px #000000;
         box-shadow: 5px 5px #000000;
         color: #FFFFFF;
         border: none;
+        width: 300px;
         display: inline-block;
         padding: 6px 24px;
         z-index: 2;
@@ -163,7 +199,8 @@
         <center>
             <h2>Forty years ago we lost a <span style="color:blueviolet;font-size: 24px;font-weight: bold;">huge</span> number of ships in this asteroid field</h2> <br />
             <h2>From low resolution images we received, it seems like the asteroids contain lots of <span style="color:blueviolet;font-size: 24px;font-weight: bold;">points</span></h2> <br />
-            <h2><span style="color:dodgerblue;font-size: 24px;font-weight: bold;">Click Anywhere To Go Get 'Em!</span></h2>
+            <h2>Take command of a mining party to go explore the sector and get them</h2> <br />
+            <h2><span style="color:dodgerblue;font-size: 24px;font-weight: bold;">Click Anywhere Begin!</span></h2>
         </center>
     </div>
 
@@ -180,9 +217,24 @@
         <p><span style="color:yellowgreen">Escape:</span> <span style="color:deepskyblue">Pause</span></p>
     </div>
 
+    <div id="death-screen">
+        <center>
+            <h1>Your Party Died!</h1><br />
+            <h2>You got <span style="color:dodgerblue;font-size: 24px;font-weight: bold;">{points}</span> points and reached level <span style="color:forestgreen;font-size: 24px;font-weight: bold;">{level}</span></h2>
+            <div id="high-score-option"><h2><span style="color:greenyellow;font-size: 24px;font-weight: bold;">Congratulations!</span> You Got A High Score!</h2><br /><input type="text" value="Name" name="nameInput" id="nameInput" style="color: #888; font-size: 28px" onfocus="high_score_name_focus(this)" onblur="high_score_name_blur(this)"><br /><br /></div>
+            <div id="no-high-score-option"><h2>Your <span style="color:red;font-size: 24px;font-weight: bold;">score</span> wasn't high enough!</h2><br /></div>
+            <a href="#" onclick="restart_game()" class="gameMenuButton"><p>Try Again!</p></a>
+        </center>
+    </div>
+
+    <div id="high-score-screen">
+        <h2>High Scores</h2><br />
+    </div>
+
     <div id="pause-screen">
         <center>
-            <h1 style="color:dodgerblue">Paused<h1>
+            <h1 style="color:dodgerblue">Paused</h1> <br />
+            <p>(Click Anywhere To Continue)</p>
         </center>
     </div>
 
@@ -192,19 +244,33 @@
 
     <div id="level"><h1>Level: 1</h1></div>
 
-
-
     <canvas id="cvs"></canvas>
 
     <script type="text/javascript">
 
         document.onmousedown = disable_click;
         $("#pause-screen")[0].style.display = "none";
+        $("#death-screen")[0].style.display = "none";
 
         function disable_click(event) {
             if (event.button == 2) {
                 return false;
             }
+        }
+
+        $(window).resize(function () {
+            game_width = window.innerWidth;
+            game_height = window.innerHeight;
+            canvas.width = game_width;
+            canvas.height = game_height;
+        });
+
+        function high_score_name_focus(i) {
+            if (i.value == i.defaultValue) { i.value = ""; i.style.color = "#000"; }
+        }
+
+        function high_score_name_blur(i) {
+            if (i.value == "") { i.value = i.defaultValue; i.style.color = "#888"; }
         }
 
         var game_width = window.innerWidth;
@@ -213,6 +279,8 @@
         var game_score = 0;
         var game_level = 1;
         var game_state = "start-screen";
+
+        var cached_death_html = $("#death-screen")[0].innerHTML;
 
         var canvas = document.getElementById("cvs");
         canvas.width = game_width;
@@ -248,12 +316,43 @@
             handle_input();
         };
 
+        function restart_game() {
+            for (var i = 0; i < high_score_list.length; i++) {
+                if (game_score > high_score_list[i].score) {
+                    high_score_list[i].name = $("#nameInput")[0].value;
+                    high_score_list[i].score = game_score;
+                    break;
+                }
+            }
+
+            save_high_scores();
+            update_high_score_list();
+
+            game_state = "start-screen";
+            game_score = 0;
+            game_level = 1;
+
+            initialize_start_screen();
+            $("#death-screen")[0].style.display = "none";
+            $("#death-screen")[0].innerHTML = cached_death_html;
+            $("#controls-screen")[0].style.display = "block";
+            $("#start-screen")[0].style.display = "block";
+
+            canvas.onclick = function () {
+                if (!mouse.is_locked) {
+                    canvas.request_pointer_lock();
+                }
+            }
+        }
+
         /* IO CODE */
         var mouse = {
             x: 0.0,
             y: 0.0,
             down_x: 0.0,
             down_y: 0.0,
+            unwrapped_x: 0.0,
+            unwrapped_y: 0.0,
             is_down: -1,
             is_clicked: -1,
             is_dragging: false,
@@ -276,6 +375,11 @@
                 if (mouse.is_locked) {
                     mouse.x += input.movementX;
                     mouse.y += input.movementY;
+
+                    if (mouse.is_down >= 0) {
+                        mouse.unwrapped_x += input.movementX;
+                        mouse.unwrapped_y += input.movementY;
+                    }
 
                     if (mouse.x > game_width)
                         mouse.x -= game_width;
@@ -307,6 +411,10 @@
                 mouse.down_time = (new Date()).getTime();
                 mouse.down_x = mouse.x;
                 mouse.down_y = mouse.y;
+
+                mouse.unwrapped_x = mouse.x;
+                mouse.unwrapped_y = mouse.y;
+
                 mouse.is_dragging = false;
             }, false);
 
@@ -355,6 +463,7 @@
                 if (game_state == "start-screen") {
                     $("#start-screen")[0].style.display = "none";
                     $("#controls-screen")[0].style.display = "none";
+                    $("#high-score-screen")[0].style.display = "none";
                     game_state = "play";
                     game_level = 1;
                     initialize_game_data();
@@ -367,8 +476,10 @@
                     game_loop();
                 }
             } else {
-                canvas.onclick = function () {
-                    canvas.request_pointer_lock();
+                if (game_state != "dead") {
+                    canvas.onclick = function () {
+                        canvas.request_pointer_lock();
+                    }
                 }
 
                 console.log("blah");
@@ -961,7 +1072,7 @@
             } else {
                 for (var i = 0; i < ships.length; i++) {
                     ships[i].x = game_width / 2.0 + 200 * Math.random() - 100.0;
-                    ships[i].y = game_width / 2.0 + 200 * Math.random() - 100.0;
+                    ships[i].y = game_height / 2.0 + 200 * Math.random() - 100.0;
                 }
 
                 ships.push(
@@ -976,9 +1087,9 @@
             }
 
 
-            var asteroids_per_level = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7];
+            var asteroids_per_level = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 9, 10];
 
-            for (var i = 0; i < asteroids_per_level[game_level-1]; i++) {
+            for (var i = 0; i < asteroids_per_level[game_level - 1]; i++) {
 
                 var position = {
                     x: game_width * Math.random(),
@@ -994,6 +1105,85 @@
                 create_asteroid(position, game_parameters.asteroid_initial_radius);
             }
         }
+
+        /* HIGH SCORE CODE */
+        var high_score_list = [];
+
+        function load_high_scores() {
+            high_score_list = [];
+
+            scores = localStorage.getItem("scores");
+
+            if (!scores)
+                return;
+
+            scores = scores.split("|");
+
+            for (var j = 0; j < scores.length - 1; j++) {
+                high_score_list.push({
+                    name: scores[j].split("][")[0],
+                    score: Number(scores[j].split("][")[1])
+                });
+            }
+        }
+
+        function save_high_scores() {
+            var date = new Date();
+
+            // NOTE(schsam): We only save high scores locally for 5 months.
+            date.setMonth(date.getMonth() + 5);
+
+            var score_string = "";
+
+            for (var i = 0; i < high_score_list.length; i++) {
+                score_string += high_score_list[i].name + "][" + high_score_list[i].score + "|"
+            }
+
+            localStorage.setItem("scores", score_string);
+        }
+
+        function create_dummy_scores() {
+            load_high_scores();
+            console.log(high_score_list);
+
+            if (high_score_list.length == 0) {
+                console.log("blah");
+                high_score_list.push({ name: "Sam", score: 2000 });
+                high_score_list.push({ name: "Was", score: 1000 });
+                high_score_list.push({ name: "Here", score: 500 });
+                high_score_list.push({ name: "Hi", score: 100 });
+                high_score_list.push({ name: "Hi", score: 95 });
+                high_score_list.push({ name: "Hi", score: 90 });
+                high_score_list.push({ name: "Hi", score: 85 });
+                high_score_list.push({ name: "Hi", score: 75 });
+                high_score_list.push({ name: "Hi", score: 65 });
+                high_score_list.push({ name: "Hi", score: 55 });
+            }
+
+            save_high_scores();
+        }
+
+        function update_high_score_list() {
+            var html_code = "<h2>High Scores</h2><br />";
+
+            html_code += "<div class=\"row\">";
+            html_code += "<div class=\"column\">";
+            for (var i = 0; i < high_score_list.length; i++) {
+                html_code += "<p><span style=\"color: yellowgreen\">" + high_score_list[i].name + "</span></p><br />";
+            }
+            html_code += "</div>";
+            html_code += "<div class=\"column\">";
+            for (var i = 0; i < high_score_list.length; i++) {
+                html_code += "<p><span style=\"color: cornflowerblue\">" + high_score_list[i].score + "</span></p><br />";
+            }
+            html_code += "</div>";
+            html_code += "</div>";
+
+            $("#high-score-screen")[0].innerHTML = html_code;
+        }
+
+        create_dummy_scores();
+        update_high_score_list();
 
         /* RENDER / UPDATE CODE */
         function draw_game() {
@@ -1205,7 +1395,28 @@
             }
 
             if (ships.length == 0 && game_state == "play") {
+                $("#death-screen")[0].style.display = "block";
+                var death_string = $("#death-screen")[0].innerHTML;
+                death_string = death_string.replace("{points}", game_score);
+                death_string = death_string.replace("{level}", game_level);
 
+                $("#death-screen")[0].innerHTML = death_string;
+
+                $("#high-score-option")[0].style.display = "none";
+                $("#no-high-score-option")[0].style.display = "block";
+
+                for (var i = 0; i < high_score_list.length; i++) {
+                    if (game_score > high_score_list[i].score) {
+                        $("#high-score-option")[0].style.display = "block";
+                        $("#no-high-score-option")[0].style.display = "none";
+                        break;
+                    }
+                }
+
+                $("#high-score-screen")[0].style.display = "block";
+
+                game_state = "dead";
+                document.exit_pointer_lock();
             }
 
             if (asteroids.length == 0 && game_state == "play") {
@@ -1275,28 +1486,61 @@
                     selected_ships = [];
                 }
 
-                var min_mouse_x = Math.min(mouse.x, mouse.down_x);
-                var min_mouse_y = Math.min(mouse.y, mouse.down_y);
+                var min_mouse_x = Math.min(mouse.unwrapped_x, mouse.down_x);
+                var min_mouse_y = Math.min(mouse.unwrapped_y, mouse.down_y);
 
-                var max_mouse_x = Math.max(mouse.x, mouse.down_x);
-                var max_mouse_y = Math.max(mouse.y, mouse.down_y);
-
-                for (var i = 0; i < ships.length; i++) {
-                    if (ships[i].x > min_mouse_x && ships[i].x < max_mouse_x &&
-                        ships[i].y > min_mouse_y && ships[i].y < max_mouse_y)
-                        selected_ships.push({ id: i });
-                }
+                var max_mouse_x = Math.max(mouse.unwrapped_x, mouse.down_x);
+                var max_mouse_y = Math.max(mouse.unwrapped_y, mouse.down_y);
 
                 graphics.beginPath();
 
                 graphics.fillStyle = "#0000FF"
                 graphics.globalAlpha = 0.2;
 
-                graphics.fillRect(
-                    min_mouse_x,
-                    min_mouse_y,
-                    max_mouse_x - min_mouse_x,
-                    max_mouse_y - min_mouse_y);
+                for (var tx = -1; tx <= 1; tx++) {
+                    for (var ty = -1; ty <= 1; ty++) {
+                        var offset = { x: 0, y: 0 };
+                        var draw = false;
+
+                        if (tx == 0 && ty == 0)
+                            draw = true;
+
+                        if (tx < 0 && min_mouse_x < 0) {
+                            offset.x = game_width;
+                            draw = true;
+                        }
+
+                        if (ty < 0 && min_mouse_y < 0) {
+                            offset.y = game_height;
+                            draw = true;
+                        }
+
+                        if (tx > 0 && max_mouse_x > game_width) {
+                            offset.x = -game_width;
+                            draw = true;
+                        }
+
+                        if (ty > 0 && min_mouse_y > game_height) {
+                            offset.y = -game_height;
+                            draw = true;
+                        }
+
+                        if (draw) {
+                            for (var i = 0; i < ships.length; i++) {
+                                if (ships[i].x > min_mouse_x + offset.x && ships[i].x < max_mouse_x + offset.x &&
+                                    ships[i].y > min_mouse_y + offset.y && ships[i].y < max_mouse_y + offset.y)
+                                    selected_ships.push({ id: i });
+                            }
+
+                            graphics.fillRect(
+                                min_mouse_x + offset.x,
+                                min_mouse_y + offset.y,
+                                max_mouse_x - min_mouse_x,
+                                max_mouse_y - min_mouse_y);
+                        }
+                    }
+                }
+
 
                 graphics.globalAlpha = 1.0
             }
