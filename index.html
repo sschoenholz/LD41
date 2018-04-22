@@ -78,13 +78,14 @@
     #level {
         position: absolute;
         right: 0px;
-        width: 200px;
+        width: 150px;
         background: none;
         color: #FFFFFF;
         border: #FFFFFF;
-        margin: 0px;
-        padding: 0px;
+        margin: 10px;
+        padding: 10px;
         z-index: 2;
+        pointer-events: none;
     }
 
     #start-screen {
@@ -97,17 +98,19 @@
         transform: translate(-50%,0);
         padding: 0;
         z-index: 3;
+        pointer-events: none;
     }
 
     #controls-screen {
         position: absolute;
         margin: 24.5% 0%;
-        width: 450px;
+        width: 360px;
         background: #181818;
         color: #EEEEEE;
         border: none;
         padding: 25px;
         z-index: 3;
+        pointer-events: none;
     }
 
     #pause-screen {
@@ -120,6 +123,7 @@
         transform: translate(-50%,0);
         padding: 0;
         z-index: 3;
+        pointer-events: none;
     }
 
     .gameMenuButton {
@@ -186,7 +190,7 @@
         <div id="score"><h1>0</h1></div>
     </div>
 
-    <div id="level"><h2>Level: 0</h2></div>
+    <div id="level"><h1>Level: 1</h1></div>
 
 
 
@@ -207,7 +211,7 @@
         var game_height = window.innerHeight;
 
         var game_score = 0;
-        var game_level = -1;
+        var game_level = 1;
         var game_state = "start-screen";
 
         var canvas = document.getElementById("cvs");
@@ -352,13 +356,14 @@
                     $("#start-screen")[0].style.display = "none";
                     $("#controls-screen")[0].style.display = "none";
                     game_state = "play";
-                    game_level = 0;
+                    game_level = 1;
                     initialize_game_data();
                 }
 
                 if (game_state == "paused") {
                     $("#pause-screen")[0].style.display = "none";
                     game_state = "play";
+                    last_frame = (new Date().getTime());
                     game_loop();
                 }
             } else {
@@ -939,9 +944,26 @@
             selected_ships = [];
             bullets = [];
 
-            ships = [];
+            if (game_level == 1) {
+                ships = [];
 
-            for (var i = 0; i < 5; i++) {
+                for (var i = 0; i < 5; i++) {
+                    ships.push(
+                        {
+                            x: game_width / 2.0 + 200 * Math.random() - 100.0,
+                            y: game_height / 2.0 + 200 * Math.random() - 100.0,
+                            angle: 0.0,
+                            target: { x: 0, y: 0, active: false, command_id: 0 },
+                            last_fired: (new Date()).getTime(),
+                            max_radius: ship_graphic.radius
+                        });
+                }
+            } else {
+                for (var i = 0; i < ships.length; i++) {
+                    ships[i].x = game_width / 2.0 + 200 * Math.random() - 100.0;
+                    ships[i].y = game_width / 2.0 + 200 * Math.random() - 100.0;
+                }
+
                 ships.push(
                     {
                         x: game_width / 2.0 + 200 * Math.random() - 100.0,
@@ -953,12 +975,21 @@
                     });
             }
 
-            for (var i = 0; i < 1; i++) {
+
+            var asteroids_per_level = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7];
+
+            for (var i = 0; i < asteroids_per_level[game_level-1]; i++) {
 
                 var position = {
                     x: game_width * Math.random(),
                     y: game_height * Math.random()
                 };
+
+                while (Math.abs(position.x - game_width / 2.0) < 100.0)
+                    position.x = game_width * Math.random();
+
+                while (Math.abs(position.y - game_height / 2.0) < 100.0)
+                    position.y = game_height * Math.random();
 
                 create_asteroid(position, game_parameters.asteroid_initial_radius);
             }
@@ -1023,7 +1054,8 @@
                 if (ships[i].target.active && ships[i].target.mode == "attack") {
                     var target = asteroids[ships[i].target.asteroid];
 
-                    ships[i] = attack(ships[i], target);
+                    if (target)
+                        ships[i] = attack(ships[i], target);
                 }
 
                 if (ships[i].target.active && ships[i].target.mode == "attack-move") {
@@ -1177,8 +1209,10 @@
             }
 
             if (asteroids.length == 0 && game_state == "play") {
-                initialize_game_data();
                 game_level++;
+                document.getElementById("level").innerHTML = "<h1>Level: " + game_level + "</h1>";
+
+                initialize_game_data();
             }
         }
 
@@ -1237,7 +1271,9 @@
             }
 
             if (mouse.is_down == 0 && mouse.is_dragging) {
-                selected_ships = []
+                if (!(16 in keyboard)) {
+                    selected_ships = [];
+                }
 
                 var min_mouse_x = Math.min(mouse.x, mouse.down_x);
                 var min_mouse_y = Math.min(mouse.y, mouse.down_y);
