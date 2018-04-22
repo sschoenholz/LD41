@@ -56,13 +56,57 @@
         background: none;
         color: #FFFFFF;
         border: #FFFFFF;
-       %border-style: dashed;
         margin: 0px;
         padding: 0px;
         z-index: 2;
     }
 
+    #start-screen-header {
+        position: absolute;
+        margin: 25% 50%;
+        width: 400px;
+        background: #002771;
+        color: #EEEEEE;
+        border: none;
+        transform: translate(-50%,-150%);
+        padding: 0;
+        z-index: 3;
+    }
 
+    #start-screen-main {
+        position: absolute;
+        margin: 0% 0%;
+        width: 90%;
+        background: #060050;
+        border: none;
+        color: #EEEEEE;
+        padding: 2% 5%;
+        z-index: 3;
+    }
+
+    .gameMenuButton {
+        background-color: #003fb6;
+        text-shadow: 3px 3px #000000;
+        box-shadow: 5px 5px #000000;
+        color: #FFFFFF;
+        border: none;
+        display: inline-block;
+        padding: 6px 24px;
+        z-index: 2;
+        text-decoration: none;
+        cursor: pointer;
+    }
+
+    .gameMenuButton:hover {
+        background-color: #0045c7;
+    }
+
+        .gameMenuButton:active {
+            position: relative;
+            top: 2px;
+            left: 2px;
+            box-shadow: 3px 3px #000000;
+        }
 </style>
 
 
@@ -72,6 +116,20 @@
 </head>
 
 <body oncontextmenu="return false">
+
+    <!--
+    <div id="start-screen-header">
+    <center>
+        <h1>AsterCraft</h1>
+        </center>
+    <div id="start-screen-main">
+        <center>
+            <a href="#" onclick="start_game()" class="gameMenuButton"><h1>New Game</h1></a> <br />
+            <a href="#" onclick="start_game()" class="gameMenuButton"><h1>Settings</h1></a>
+        </center>
+    </div>
+    </div>
+        -->
 
     <div id="score-container">
         <div id="score"><h1>0</h1></div>
@@ -294,7 +352,7 @@
 
             graphics.save();
 
-            graphics.translate(ship.x, ship.y);
+            graphics.translate(ship.x + offset.x, ship.y + offset.y);
             graphics.rotate(ship.angle);
 
             if (ship_graphic_loaded) 
@@ -551,9 +609,12 @@
         // NOTE(schsam): For now we will do asteroid-disk collision, but this
         // might not be great. If so, we can implement different kinds of
         // collision for different kinds of objects separately.
-        function ship_asteroid_intersection(ship, asteroid) {
+        function ship_asteroid_intersection_image(ship, asteroid, offset) {
             var c_theta = Math.cos(asteroid.angle);
             var s_theta = Math.sin(asteroid.angle);
+
+            asteroid.x += offset.x;
+            asteroid.y += offset.y;
 
             var v_old = {
                 x: asteroid.x + c_theta * asteroid.vertices[0].x - s_theta * asteroid.vertices[0].y,
@@ -591,6 +652,40 @@
                     continue;
 
                 return true;
+            }
+
+            return false;
+        }
+
+        function ship_asteroid_intersection(ship, asteroid) {
+
+            if (ship_asteroid_intersection_image(ship, asteroid, { x: 0.0, y: 0.0 }))
+                return true;
+
+            var buffer = asteroid.max_radius;
+
+            for (var dx = -1; dx <= 1; dx++) {
+                for (var dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0)
+                        continue;
+
+                    var offset = { x: 0.0, y: 0.0 };
+
+                    if (dx == -1 && asteroid.x < buffer)
+                        offset.x += game_width;
+
+                    if (dx == 1 && asteroid.x > game_width - buffer)
+                        offset.x -= game_width;
+
+                    if (dy == -1 && asteroid.y < buffer)
+                        offset.y += game_height;
+
+                    if (dy == 1 && asteroid.y > game_height - buffer)
+                        offset.y -= game_height;
+
+                    if (ship_asteroid_intersection_image(ship, asteroid, offset))
+                        return true;
+                }
             }
 
             return false;
@@ -664,7 +759,63 @@
 
         }
         
-        bullets = [];
+        var bullets = [];
+
+        // CLICK MARKERS
+        var click_markers = [];
+
+        function create_click_marker(x, y, color) {
+            var initial_size = 0.0;
+            var final_size = 30.0;
+
+            var final_color = { r: 46, b: 46, g: 46 };
+            var duration = 200;
+
+            click_markers.push(
+                {
+                    x: x,
+                    y: y,
+                    initial_size: initial_size,
+                    final_size: final_size,
+                    initial_color: color,
+                    final_color: final_color,
+                    creation_time: (new Date()).getTime(),
+                    duration: duration
+                });
+        }
+
+        function lerp(x, y, t) {
+            return x + t * (y - x);
+        }
+
+        function draw_click_marker(marker, offset) {
+            var color = "#1ef9de";
+
+            var t = ((new Date()).getTime() - marker.creation_time) / marker.duration;
+
+            var color = {
+                r: lerp(marker.initial_color.r, marker.final_color.r, t),
+                g: lerp(marker.initial_color.g, marker.final_color.g, t),
+                b: lerp(marker.initial_color.b, marker.final_color.b, t),
+            };
+
+            var size = lerp(marker.initial_size, marker.final_size, t);
+
+            graphics.save();
+
+            graphics.translate(marker.x + offset.x, marker.y + offset.y);
+
+            graphics.lineWidth = 3;
+            graphics.strokeStyle = "rgb(" + color.r + "," + color.g + "," + color.b + ")";
+
+            graphics.beginPath();
+
+            graphics.arc(0, 0, size, 0, 2 * Math.PI);
+
+            graphics.stroke();
+            graphics.restore();
+
+        }
 
         /* INITIALIZATION CODE */
         function initialize_game_data() {
@@ -711,12 +862,12 @@
         function draw_game() {
             graphics.setTransform(1, 0, 0, 1, 0, 0);
 
-            graphics.fillStyle = "#2e2e2e";
+            graphics.fillStyle = game_parameters.background_color;
 
             graphics.fillRect(0, 0, game_width, game_height);
 
             for (var i = 0; i < ships.length; i++) {
-                draw_ship(ships[i]);
+                draw_periodic(ships[i], draw_ship);
             }
 
             for (var i = 0; i < selected_ships.length; i++) {
@@ -732,12 +883,21 @@
             for (var i = 0; i < bullets.length; i++) {
                 draw_bullet(bullets[i]);
             }
+            
+            for (var i = 0; i < click_markers.length; i++) {
+                draw_periodic(click_markers[i], draw_click_marker);
+
+                if ((new Date()).getTime() - click_markers[i].creation_time > click_markers[i].duration) {
+                    click_markers.splice(i, 1);
+                }
+            }
 
             if(mouse.is_locked)
                 draw_mouse();
         }
 
         var game_parameters = {
+            background_color: "#2e2e2e",
             ship_fire_rate: 200,
             ship_speed: 0.3,
             min_ship_to_target: 5.0,
@@ -952,6 +1112,9 @@
                     }
                 }
 
+                if (selected_asteroid < 0)
+                    create_click_marker(mouse.x, mouse.y, { r: 255, g: 0, b: 0 });
+
                 command_count++;
 
                 mouse.mode = "select";
@@ -1002,6 +1165,7 @@
                             active: true, command_id: command_count,
                             mode: "move"
                         };
+
                     } else {
                         ships[selected_ships[i].id].target = {
                             asteroid: selected_asteroid,
@@ -1010,6 +1174,9 @@
                         };
                     }
                 }
+
+                if(selected_asteroid < 0)
+                    create_click_marker(mouse.x, mouse.y, { r: 0, g: 255, b: 0 });
 
                 command_count++;
             }
