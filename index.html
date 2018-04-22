@@ -206,6 +206,7 @@
 
     <div id="controls-screen">
         <h2>Controls</h2> <br />
+        <p>Mouse wraps around the screen</p>
         <p><span style="color:forestgreen">Left Click (Ship):</span> <span style="color:deepskyblue">Select</span></p>
         <p><span style="color:forestgreen">Left Drag:</span> <span style="color:deepskyblue">Select</span></p>
         <p><span style="color:yellowgreen">Shift</span> + <span style="color:forestgreen">Select:</span> <span style="color:deepskyblue">Add to Selection</span></p>
@@ -215,6 +216,8 @@
         <p><span style="color:red">A + Left Click:</span> <span style="color:deepskyblue">Attack Move</span></p>
         <p><span style="color:yellowgreen">Control:</span> <span style="color:deepskyblue">Show Controls</span></p>
         <p><span style="color:yellowgreen">Escape:</span> <span style="color:deepskyblue">Pause</span></p>
+        <p><span style="color:yellowgreen">M:</span> <span style="color:deepskyblue">Toggle Music</span></p>
+        <p><span style="color:yellowgreen">S:</span> <span style="color:deepskyblue">Toggle SFX</span></p>
     </div>
 
     <div id="death-screen">
@@ -517,6 +520,18 @@
 
                 if (input.keyCode == keyboard.CONTROLS_KEY && game_state != "start-screen")
                     $("#controls-screen")[0].style.display = "block";
+
+                if (input.keyCode == 77) {
+                    music_enabled = !music_enabled;
+                    if (!music_enabled)
+                        stop_song();
+                    if (music_enabled)
+                        play_song();
+                }
+
+                if (input.keyCode == 83) {
+                    sfx_enabled = !sfx_enabled;
+                }
             }, false);
 
         document.body.addEventListener(
@@ -541,6 +556,16 @@
                     ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
             }
         );
+
+        var ship_fire_sounds = [
+            new sound("sounds/laser_1.wav"),
+            new sound("sounds/laser_2.wav"),
+            new sound("sounds/laser_3.wav"),
+            new sound("sounds/laser_4.wav")
+        ];
+
+        for (var i = 0; i < ship_fire_sounds.length;i++)
+            ship_fire_sounds[i].sound.volume = 0.2;
 
         var selected_ships = [];
         var ships = [];
@@ -668,6 +693,8 @@
                     });
 
                     ship.last_fired = (new Date()).getTime();
+
+                    play_ship_fire();
                 }
             }
 
@@ -1016,6 +1043,83 @@
 
         }
 
+        /* SOUND CODE */
+        function sound(src) {
+            this.sound = document.createElement("audio");
+            this.sound.src = src;
+            this.sound.setAttribute("preload", "auto");
+            this.sound.setAttribute("controls", "none");
+            this.sound.style.display = "none";
+
+            document.body.appendChild(this.sound);
+
+            this.play = function () {
+                this.sound.play();
+            }
+
+            this.stop = function () {
+                this.sound.pause();
+            }
+        }
+
+        var explosion_sounds =
+            [
+                new sound("sounds/engine_1.wav"),
+                new sound("sounds/explosion_1.wav"),
+                new sound("sounds/explosion_2.wav"),
+                new sound("sounds/explosion_3.wav")
+            ];
+
+        function play_explosion() {
+            var index = Math.floor(Math.random() * explosion_sounds.length);
+
+            if(sfx_enabled)
+                explosion_sounds[index].play();
+        }
+
+        function play_ship_fire() {
+            var index = Math.floor(Math.random() * ship_fire_sounds.length);
+
+            if(sfx_enabled)
+                ship_fire_sounds[index].play();
+        }
+
+        var current_song = -1;
+
+        var music_enabled = true;
+        var sfx_enabled = true;
+
+        var background_music = [
+            new sound("music/song_1.wav"),
+            new sound("music/song_2.wav"),
+            new sound("music/song_3.wav")
+        ];
+
+        for (var i = 0; i < background_music.length; i++) {
+            background_music[i].sound.volume = 0.15;
+            background_music[i].sound.loop = true;
+        }
+
+        function stop_song() {
+            if (current_song > -1)
+                background_music[current_song].stop();
+        }
+
+        function play_song() {
+            if (current_song > -1)
+                background_music[current_song].stop();
+
+            var index = Math.floor(Math.random() * background_music.length);
+            while (current_song == index)
+                index = Math.floor(Math.random() * background_music.length);
+
+            console.log(index);
+
+            if(music_enabled)
+                background_music[index].play();
+            current_song = index;
+        }
+
         /* INITIALIZATION CODE */
         function initialize_start_screen() {
             if (!ship_graphic_loaded) {
@@ -1041,6 +1145,8 @@
 
                 create_asteroid(position, base_radius);
             }
+
+            play_song();
 
             game_loop();
         }
@@ -1086,7 +1192,6 @@
                     });
             }
 
-
             var asteroids_per_level = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 9, 10];
 
             for (var i = 0; i < asteroids_per_level[game_level - 1]; i++) {
@@ -1104,6 +1209,9 @@
 
                 create_asteroid(position, game_parameters.asteroid_initial_radius);
             }
+
+            play_song();
+
         }
 
         /* HIGH SCORE CODE */
@@ -1315,6 +1423,8 @@
                         if (selected_index >= 0)
                             selected_ships.splice(selected_index, 1);
 
+                        play_explosion();
+
                         ships.splice(i, 1);
 
                         break;
@@ -1370,6 +1480,8 @@
                         asteroids[j].health -= bullet_damage;
 
                         if (asteroids[j].health < 0) {
+                            play_explosion();
+
                             for (var z = 0; z < ships.length; z++)
                                 if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.asteroid == j)
                                     ships[z].target.active = false;
