@@ -38,6 +38,20 @@
         %text-shadow: 3px 3px #000000;
     }
 
+    p {
+        font-family: "Montserrat", sans-serif;
+        font-size: 20px;
+        margin: 1%;
+        %text-shadow: 3px 3px #000000;
+    }
+
+    span {
+        font-family: "Montserrat", sans-serif;
+        margin: 1%;
+        font-size: 20px;
+        %text-shadow: 3px 3px #000000;
+    }
+
     #score-container {
         position: absolute;
         width: 200px;
@@ -61,26 +75,50 @@
         z-index: 2;
     }
 
-    #start-screen-header {
+    #level {
+        position: absolute;
+        right: 0px;
+        width: 200px;
+        background: none;
+        color: #FFFFFF;
+        border: #FFFFFF;
+        margin: 0px;
+        padding: 0px;
+        z-index: 2;
+    }
+
+    #start-screen {
         position: absolute;
         margin: 25% 50%;
-        width: 400px;
-        background: #002771;
+        width: 700px;
+        background: #181818;
         color: #EEEEEE;
         border: none;
-        transform: translate(-50%,-150%);
+        transform: translate(-50%,0);
         padding: 0;
         z-index: 3;
     }
 
-    #start-screen-main {
+    #controls-screen {
         position: absolute;
-        margin: 0% 0%;
-        width: 90%;
-        background: #060050;
-        border: none;
+        margin: 24.5% 0%;
+        width: 450px;
+        background: #181818;
         color: #EEEEEE;
-        padding: 2% 5%;
+        border: none;
+        padding: 25px;
+        z-index: 3;
+    }
+
+    #pause-screen {
+        position: absolute;
+        margin: 25% 50%;
+        width: 700px;
+        background: #181818;
+        color: #EEEEEE;
+        border: none;
+        transform: translate(-50%,0);
+        padding: 0;
         z-index: 3;
     }
 
@@ -117,29 +155,47 @@
 
 <body oncontextmenu="return false">
 
-    <!--
-    <div id="start-screen-header">
-    <center>
-        <h1>AsterCraft</h1>
-        </center>
-    <div id="start-screen-main">
+    <div id="start-screen">
         <center>
-            <a href="#" onclick="start_game()" class="gameMenuButton"><h1>New Game</h1></a> <br />
-            <a href="#" onclick="start_game()" class="gameMenuButton"><h1>Settings</h1></a>
+            <h2>Forty years ago we lost a <span style="color:blueviolet;font-size: 24px;font-weight: bold;">huge</span> number of ships in this asteroid field</h2> <br />
+            <h2>From low resolution images we received, it seems like the asteroids contain lots of <span style="color:blueviolet;font-size: 24px;font-weight: bold;">points</span></h2> <br />
+            <h2><span style="color:dodgerblue;font-size: 24px;font-weight: bold;">Click Anywhere To Go Get 'Em!</span></h2>
         </center>
     </div>
+
+    <div id="controls-screen">
+        <h2>Controls</h2> <br />
+        <p><span style="color:forestgreen">Left Click (Ship):</span> <span style="color:deepskyblue">Select</span></p>
+        <p><span style="color:forestgreen">Left Drag:</span> <span style="color:deepskyblue">Select</span></p>
+        <p><span style="color:yellowgreen">Shift</span> + <span style="color:forestgreen">Select:</span> <span style="color:deepskyblue">Add to Selection</span></p>
+        <p><span style="color:cornflowerblue">Left Click (Background):</span> <span style="color:deepskyblue">Unselect</span></p>
+        <p><span style="color:cornflowerblue">Right Click (Background):</span> <span style="color:deepskyblue">Move</span></p>
+        <p><span style="color:red">Right Click (Enemy):</span> <span style="color:deepskyblue">Attack</span></p>
+        <p><span style="color:red">A + Left Click:</span> <span style="color:deepskyblue">Attack Move</span></p>
+        <p><span style="color:yellowgreen">Control:</span> <span style="color:deepskyblue">Show Controls</span></p>
+        <p><span style="color:yellowgreen">Escape:</span> <span style="color:deepskyblue">Pause</span></p>
     </div>
-        -->
+
+    <div id="pause-screen">
+        <center>
+            <h1 style="color:dodgerblue">Paused<h1>
+        </center>
+    </div>
 
     <div id="score-container">
         <div id="score"><h1>0</h1></div>
     </div>
+
+    <div id="level"><h2>Level: 0</h2></div>
+
+
 
     <canvas id="cvs"></canvas>
 
     <script type="text/javascript">
 
         document.onmousedown = disable_click;
+        $("#pause-screen")[0].style.display = "none";
 
         function disable_click(event) {
             if (event.button == 2) {
@@ -149,13 +205,16 @@
 
         var game_width = window.innerWidth;
         var game_height = window.innerHeight;
+
         var game_score = 0;
-        
+        var game_level = -1;
+        var game_state = "start-screen";
+
         var canvas = document.getElementById("cvs");
         canvas.width = game_width;
         canvas.height = game_height;
 
-        canvas.oncontextmenu = function () { return false;}
+        canvas.oncontextmenu = function () { return false; }
 
         var graphics = canvas.getContext("2d");
 
@@ -173,7 +232,8 @@
         })();
 
         function game_loop() {
-            requestAnimFrame(game_loop);
+            if (game_state != "paused")
+                requestAnimFrame(game_loop);
 
             dt = (new Date()).getTime() - last_frame;
             last_frame = (new Date()).getTime();
@@ -264,14 +324,18 @@
 
         canvas.onclick = function () {
             if (!mouse.is_locked) {
-                canvas.request_pointer_lock =
-                    canvas.requestPointerLock ||
-                    canvas.mozRequestPointerLock ||
-                    canvas.webkitRequestPointerLock;
                 canvas.request_pointer_lock();
             }
         }
-        
+
+        canvas.request_pointer_lock = canvas.requestPointerLock ||
+            canvas.mozRequestPointerLock ||
+            canvas.webkitRequestPointerLock;
+
+        document.exit_pointer_lock = document.exitPointerLock ||
+            document.mozExitPointerLock ||
+            document.webkitExitPointerLock;
+
         document.addEventListener("pointerlockchange", pointer_lock_change, false);
         document.addEventListener("mozpointerlockchange", pointer_lock_change, false);
         document.addEventListener("webkitpointerlockchange", pointer_lock_change, false);
@@ -283,18 +347,32 @@
 
                 canvas.onclick = null;
                 mouse.is_locked = true;
-            } else {
-                canvas.onclick = function () {
-                    if (!mouse.is_locked) {
-                        canvas.request_pointer_lock =
-                            canvas.requestPointerLock ||
-                            canvas.mozRequestPointerLock ||
-                            canvas.webkitRequestPointerLock;
-                        canvas.request_pointer_lock();
-                    }
+
+                if (game_state == "start-screen") {
+                    $("#start-screen")[0].style.display = "none";
+                    $("#controls-screen")[0].style.display = "none";
+                    game_state = "play";
+                    game_level = 0;
+                    initialize_game_data();
                 }
 
+                if (game_state == "paused") {
+                    $("#pause-screen")[0].style.display = "none";
+                    game_state = "play";
+                    game_loop();
+                }
+            } else {
+                canvas.onclick = function () {
+                    canvas.request_pointer_lock();
+                }
+
+                console.log("blah");
                 mouse.is_locked = false;
+
+                if (game_state == "play") {
+                    game_state = "paused";
+                    $("#pause-screen")[0].style.display = "block";
+                }
             }
         }
 
@@ -311,7 +389,7 @@
             graphics.restore();
         }
 
-        keyboard = {ATTACK_KEY: 65};
+        keyboard = { ATTACK_KEY: 65, CONTROLS_KEY: 17 };
 
         document.body.addEventListener(
             "keydown",
@@ -321,11 +399,16 @@
                 if (input.keyCode == keyboard.ATTACK_KEY && selected_ships.length > 0)
                     mouse.mode = "attack";
 
+                if (input.keyCode == keyboard.CONTROLS_KEY && game_state != "start-screen")
+                    $("#controls-screen")[0].style.display = "block";
             }, false);
 
         document.body.addEventListener(
             "keyup",
             function (input) {
+                if (input.keyCode == keyboard.CONTROLS_KEY && game_state != "start-screen")
+                    $("#controls-screen")[0].style.display = "none";
+
                 delete keyboard[input.keyCode];
             }, false);
 
@@ -355,8 +438,8 @@
             graphics.translate(ship.x + offset.x, ship.y + offset.y);
             graphics.rotate(ship.angle);
 
-            if (ship_graphic_loaded) 
-                graphics.drawImage(ship_graphic, -ship_graphic.width/2.0, -ship_graphic.height/2.0);
+            if (ship_graphic_loaded)
+                graphics.drawImage(ship_graphic, -ship_graphic.width / 2.0, -ship_graphic.height / 2.0);
 
             graphics.restore();
         }
@@ -719,12 +802,12 @@
                 {
                     x: position.x, y: position.y,
                     angle: 0.0,
-                    vx: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5),
-                    vy: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5),
+                    vx: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5) / size,
+                    vy: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5) / size,
                     omega: game_parameters.asteroid_omega_scale * (Math.random() - 0.5),
                     vertices: vertices,
                     size: size,
-                    health: size,
+                    health: size / 3.0,
                     max_radius: max_radius
                 });
         }
@@ -758,7 +841,7 @@
             graphics.restore();
 
         }
-        
+
         var bullets = [];
 
         // CLICK MARKERS
@@ -818,9 +901,9 @@
         }
 
         /* INITIALIZATION CODE */
-        function initialize_game_data() {
+        function initialize_start_screen() {
             if (!ship_graphic_loaded) {
-                requestAnimFrame(initialize_game_data);
+                requestAnimFrame(initialize_start_screen);
                 return;
             }
 
@@ -830,6 +913,33 @@
             asteroids = [];
             selected_ships = [];
             bullets = [];
+
+            for (var i = 0; i < 6; i++) {
+
+                var position = {
+                    x: game_width * Math.random(),
+                    y: game_height * Math.random()
+                };
+
+                var base_radius = 25 + Math.random() * 200;
+
+                create_asteroid(position, base_radius);
+            }
+
+            game_loop();
+        }
+
+        function initialize_game_data() {
+            if (!ship_graphic_loaded) {
+                requestAnimFrame(initialize_game_data);
+                return;
+            }
+
+            asteroids = [];
+            selected_ships = [];
+            bullets = [];
+
+            ships = [];
 
             for (var i = 0; i < 5; i++) {
                 ships.push(
@@ -850,12 +960,8 @@
                     y: game_height * Math.random()
                 };
 
-                var base_radius = 100 + Math.random() * 60;
-
-                create_asteroid(position, base_radius);
+                create_asteroid(position, game_parameters.asteroid_initial_radius);
             }
-
-            game_loop();
         }
 
         /* RENDER / UPDATE CODE */
@@ -883,7 +989,7 @@
             for (var i = 0; i < bullets.length; i++) {
                 draw_bullet(bullets[i]);
             }
-            
+
             for (var i = 0; i < click_markers.length; i++) {
                 draw_periodic(click_markers[i], draw_click_marker);
 
@@ -892,7 +998,7 @@
                 }
             }
 
-            if(mouse.is_locked)
+            if (mouse.is_locked)
                 draw_mouse();
         }
 
@@ -903,8 +1009,9 @@
             min_ship_to_target: 5.0,
             ship_attack_range: 400,
             bullet_speed: 0.5,
-            asteroid_velocity_scale: 0.2,
-            asteroid_omega_scale: 0.005 
+            asteroid_initial_radius: 150.0,
+            asteroid_velocity_scale: 0.2 * 150.0,
+            asteroid_omega_scale: 0.005
         };
 
         function update_game(dt) {
@@ -942,7 +1049,7 @@
                 }
 
             }
-        
+
             // SHIP SHIP OVERLAP
             var ship_repulsion_scale = 1.0;
             var goal_separation_radius = ship_graphic.radius * 3;
@@ -993,7 +1100,7 @@
                 }
             }
 
-            // ASTEROID DYNAMICS 
+            // ASTEROID DYNAMICS
             for (var i = 0; i < asteroids.length; i++) {
                 asteroids[i].x += dt * asteroids[i].vx;
                 asteroids[i].y += dt * asteroids[i].vy;
@@ -1009,7 +1116,7 @@
 
                 asteroids[i].angle += dt * asteroids[i].omega;
             }
-            
+
 
             // BULLET DYNAMICS
             var bullet_damage = 1;
@@ -1050,8 +1157,8 @@
                             asteroids.splice(j, 1);
 
                             if (asteroid_radius > minimum_asteroid_radius) {
-                                for (var i = 0; i < 4; i++) {
-                                    create_asteroid(pos, asteroid_radius / 1.25);
+                                for (var k = 0; k < 3; k++) {
+                                    create_asteroid(pos, asteroid_radius / 1.4);
                                 }
                             }
 
@@ -1063,6 +1170,15 @@
                         break;
                     }
                 }
+            }
+
+            if (ships.length == 0 && game_state == "play") {
+
+            }
+
+            if (asteroids.length == 0 && game_state == "play") {
+                initialize_game_data();
+                game_level++;
             }
         }
 
@@ -1082,7 +1198,7 @@
                     var dx = ships[i].x - mouse.x;
                     var dy = ships[i].y - mouse.y;
 
-                    if (dx * dx + dy * dy < ship_select_radius * ship_select_radius) 
+                    if (dx * dx + dy * dy < ship_select_radius * ship_select_radius)
                         selected_ships.push({ id: i });
                 }
             }
@@ -1175,7 +1291,7 @@
                     }
                 }
 
-                if(selected_asteroid < 0)
+                if (selected_asteroid < 0)
                     create_click_marker(mouse.x, mouse.y, { r: 0, g: 255, b: 0 });
 
                 command_count++;
@@ -1187,8 +1303,8 @@
 
 
             mouse.is_clicked = -1;
-        } 
+        }
 
-        initialize_game_data();
+        initialize_start_screen();
     </script>
-</bodyoncontextmenu="return">
+</body>
