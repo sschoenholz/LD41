@@ -1044,6 +1044,74 @@
 
         }
 
+        /* PARTICLE SYSTEM */
+        var particles = [];
+
+        function create_particles(x, y, color, count, volume) {
+            var size = 10;
+            var final_color = { r: 46, b: 46, g: 46 };
+            var duration = 400;
+            var speed_scale = 1;
+
+            for (var i = 0; i < count; i++) {
+                particles.push(
+                    {
+                        x: x + volume * (Math.random() - 0.5),
+                        y: y + volume * (Math.random() - 0.5),
+                        vx: (Math.random() - 0.5) * speed_scale,
+                        vy: (Math.random() - 0.5) * speed_scale,
+                        size: size,
+                        initial_color: color,
+                        final_color: final_color,
+                        creation_time: (new Date()).getTime(),
+                        duration: duration
+                    });
+            }
+        }
+
+        function update_particles(dt) {
+            for (var i = 0; i < particles.length; i++) {
+                particles[i].x += particles[i].vx * dt;
+                particles[i].y += particles[i].vy * dt;
+
+                if (particles[i].x > game_width)
+                    particles[i].x -= game_width;
+                if (particles[i].x < 0)
+                    particles[i].x += game_width;
+
+                if (particles[i].y > game_height)
+                    particles[i].y -= game_height;
+                if (particles[i].y < 0)
+                    particles[i].y += game_height;
+
+                var t = ((new Date()).getTime() - particles[i].creation_time) / particles[i].duration;
+
+                if (t > 1)
+                    particles.splice(i, 1);
+            }
+        }
+
+        function draw_particles() {
+            for (var i = 0; i < particles.length; i++) {
+                var t = ((new Date()).getTime() - particles[i].creation_time) / particles[i].duration;
+
+                var color = {
+                    r: lerp(particles[i].initial_color.r, particles[i].final_color.r, t),
+                    g: lerp(particles[i].initial_color.g, particles[i].final_color.g, t),
+                    b: lerp(particles[i].initial_color.b, particles[i].final_color.b, t),
+                };
+
+                if (t < 1) {
+
+                    graphics.fillStyle = "rgb(" + color.r + "," + color.g + "," + color.b + ")";
+
+                    graphics.fillRect(particles[i].x, particles[i].y, particles[i].size, particles[i].size);
+
+                }
+            }
+
+        }
+
         /* SOUND CODE */
         function sound(src) {
             this.sound = document.createElement("audio");
@@ -1302,6 +1370,8 @@
 
             graphics.fillRect(0, 0, game_width, game_height);
 
+            draw_particles();
+
             for (var i = 0; i < ships.length; i++) {
                 draw_periodic(ships[i], draw_ship);
             }
@@ -1425,6 +1495,7 @@
                             selected_ships.splice(selected_index, 1);
 
                         play_explosion();
+                        create_particles(ships[i].x, ships[i].y, { r: 0, g: 255, b: 0 }, 25, ship_graphic.radius / 2.0);
 
                         ships.splice(i, 1);
 
@@ -1497,6 +1568,7 @@
                                 }
                             }
 
+                            create_particles(pos.x, pos.y, { r: 255, g: 255, b: 255 }, 35, asteroid_radius / 2.0);
                             game_score += Math.floor(asteroid_radius);
 
                             document.getElementById("score").innerHTML = "<h1>" + game_score + "</h1>";
@@ -1506,6 +1578,8 @@
                     }
                 }
             }
+
+            update_particles(dt);
 
             if (ships.length == 0 && game_state == "play") {
                 $("#death-screen")[0].style.display = "block";
