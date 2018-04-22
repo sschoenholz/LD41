@@ -28,14 +28,14 @@
         font-family: "Montserrat", sans-serif;
         font-size: 32px;
         margin: 1%;
-        text-shadow: 3px 3px #000000;
+        %text-shadow: 3px 3px #000000;
     }
     
     h2 {
         font-family: "Montserrat", sans-serif;
         font-size: 24px;
         margin: 1%;
-        text-shadow: 3px 3px #000000;
+        %text-shadow: 3px 3px #000000;
     }
 
     #score-container {
@@ -56,7 +56,7 @@
         background: none;
         color: #FFFFFF;
         border: #FFFFFF;
-        border-style: dashed;
+       %border-style: dashed;
         margin: 0px;
         padding: 0px;
         z-index: 2;
@@ -74,7 +74,7 @@
 <body oncontextmenu="return false">
 
     <div id="score-container">
-        <div id="score"><h1>$ 0</h1></div>
+        <div id="score"><h1>0</h1></div>
     </div>
 
     <canvas id="cvs"></canvas>
@@ -134,6 +134,7 @@
             down_y: 0.0,
             is_down: -1,
             is_clicked: -1,
+            is_dragging: false,
             down_time: -1,
             click_time_left: 135,
             click_time_right: 200,
@@ -155,15 +156,22 @@
                     mouse.y += input.movementY;
 
                     if (mouse.x > game_width)
-                        mouse.x = game_width;
+                        mouse.x -= game_width;
                     if (mouse.x < 0)
-                        mouse.x = 0;
+                        mouse.x += game_width;
 
                     if (mouse.y > game_height)
-                        mouse.y = game_height;
+                        mouse.y -= game_height;
                     if (mouse.y < 0)
-                        mouse.y = 0;
+                        mouse.y += game_height;
 
+                    if (mouse.is_down != -1 && !mouse.is_dragging) {
+                        var dist_sq = (mouse.x - mouse.down_x) * (mouse.x - mouse.down_x) + (mouse.y - mouse.down_y) * (mouse.y - mouse.down_y);
+                        var min_click_dist_sq = 40 * 40;
+
+                        if (dist_sq > min_click_dist_sq)
+                            mouse.is_dragging = true;
+                    }
                 } else {
                     mouse.x = input.x;
                     mouse.y = input.y;
@@ -177,6 +185,7 @@
                 mouse.down_time = (new Date()).getTime();
                 mouse.down_x = mouse.x;
                 mouse.down_y = mouse.y;
+                mouse.is_dragging = false;
             }, false);
 
         canvas.addEventListener(
@@ -185,7 +194,7 @@
                 var dist_sq = (mouse.x - mouse.down_x) * (mouse.x - mouse.down_x) + (mouse.y - mouse.down_y) * (mouse.y - mouse.down_y);
                 var min_click_distance = 40 * 40;
 
-                if (mouse.is_down == 0 && dist_sq < min_click_distance)
+                if (mouse.is_down == 0 && !mouse.is_dragging)
                     mouse.is_clicked = mouse.is_down;
 
                 if (mouse.is_down == 2)
@@ -271,11 +280,15 @@
             "load",
             function () {
                 ship_graphic_loaded = true;
-                ship_graphic.radius = Math.sqrt(ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
+                ship_graphic.radius = Math.sqrt(
+                    ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
             }
         );
 
-        function draw_ship(ship) {
+        var selected_ships = [];
+        var ships = [];
+
+        function draw_ship(ship, offset) {
             var color = "#1ef9de";
             var size = 20.0;
 
@@ -325,52 +338,153 @@
         }
 
 
-        var selected_ships = [];
-        var ships = [];
+        function move(ship) {
+            var dx = ship.target.x - ship.x;
+            var dy = ship.target.y - ship.y;
 
-        for (var i = 0; i < 5; i++) {
-            ships.push(
-                {
-                    x: game_width / 2.0 + 200 * Math.random() - 100.0,
-                    y: game_height / 2.0 + 200 * Math.random() - 100.0,
-                    angle: 0.0,
-                    target: { x: 0, y: 0, active: false, command_id: 0 },
-                    last_fired: (new Date()).getTime()
+            if (Math.abs(dx) > game_width / 2.0)
+                dx -= Math.sign(dx) * game_width;
+            if (Math.abs(dy) > game_height / 2.0)
+                dy -= Math.sign(dy) * game_height;
+
+            var norm = Math.sqrt(dx * dx + dy * dy);
+
+            if (norm < game_parameters.ship_speed * dt)
+                norm = game_parameters.ship_speed * dt;
+
+            if (norm < game_parameters.min_ship_to_target) {
+                ship.target.active = false;
+            } else {
+                ship.x += dx / norm * game_parameters.ship_speed * dt;
+                ship.y += dy / norm * game_parameters.ship_speed * dt;
+
+                if (ship.x > game_width)
+                    ship.x -= game_width;
+                if (ship.x < 0)
+                    ship.x += game_width;
+                if (ship.y > game_height)
+                    ship.y -= game_height;
+                if (ship.y < 0)
+                    ship.y += game_height;
+
+                ship.angle = Math.atan2(dy, dx) + Math.PI / 2.0;
+            }
+
+            return ship
+        }
+
+        function attack(ship, target) {
+            var dx = target.x - ship.x;
+            var dy = target.y - ship.y;
+
+            if (Math.abs(dx) > game_width / 2.0)
+                dx -= Math.sign(dx) * game_width;
+            if (Math.abs(dy) > game_height / 2.0)
+                dy -= Math.sign(dy) * game_height;
+
+            var norm = Math.sqrt(dx * dx + dy * dy);
+
+            if (norm > game_parameters.ship_attack_range) {
+                ship.x += dx / norm * game_parameters.ship_speed * dt;
+                ship.y += dy / norm * game_parameters.ship_speed * dt;
+
+                if (ship.x > game_width)
+                    ship.x -= game_width;
+                if (ship.x < 0)
+                    ship.x += game_width;
+                if (ship.y > game_height)
+                    ship.y -= game_height;
+                if (ship.y < 0)
+                    ship.y += game_height;
+
+                ship.angle = Math.atan2(dy, dx) + Math.PI / 2.0;
+            } else {
+                ship.angle = Math.atan2(dy, dx) + Math.PI / 2.0;
+
+                if ((new Date()).getTime() - ship.last_fired > game_parameters.ship_fire_rate) {
+                    bullets.push({
+                        x: ship.x + ship_graphic.radius * dx / norm,
+                        y: ship.y + ship_graphic.radius * dy / norm,
+                        vx: dx / norm * game_parameters.bullet_speed,
+                        vy: dy / norm * game_parameters.bullet_speed,
+                        fire_time: (new Date()).getTime()
+                    });
+
+                    ship.last_fired = (new Date()).getTime();
                 }
-            );
+            }
+
+            return ship
         }
 
         /* ASTEROID CODE */
-        function draw_asteroid(asteroid) {
+        function draw_asteroid(asteroid, offset) {
             var color = "#AAAAAA";
 
             graphics.lineWidth = 4;
             graphics.strokeStyle = color;
 
             graphics.save();
-
-            graphics.translate(asteroid.x, asteroid.y);
+            graphics.translate(asteroid.x + offset.x, asteroid.y + offset.y);
             graphics.rotate(asteroid.angle);
 
             graphics.beginPath();
             graphics.moveTo(asteroid.vertices[0].x, asteroid.vertices[0].y);
 
-            for (var i = 0; i < asteroid.vertices.length ; i++) {
+            for (var i = 0; i < asteroid.vertices.length; i++) {
                 graphics.lineTo(asteroid.vertices[i].x, asteroid.vertices[i].y);
             }
 
             graphics.lineTo(asteroid.vertices[0].x, asteroid.vertices[0].y);
 
             graphics.stroke();
-
             graphics.restore();
+
         }
 
-        function point_in_asteroid(x, y, asteroid) {
+        function draw_periodic(drawable, draw_func) {
+            draw_func(drawable, { x: 0.0, y: 0.0 });
+
+            var buffer = drawable.max_radius;
+
+            for (var dx = -1; dx <= 1; dx++) {
+                for (var dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0)
+                        continue;
+
+                    var offset = { x: 0.0, y: 0.0 };
+
+                    if (dx == -1 && drawable.x < buffer)
+                        offset.x += game_width;
+
+                    if (dx == 1 && drawable.x > game_width - buffer)
+                        offset.x -= game_width;
+
+                    if (dy == -1 && drawable.y < buffer)
+                        offset.y += game_height;
+
+                    if (dy == 1 && drawable.y > game_height - buffer)
+                        offset.y -= game_height;
+
+                    draw_func(drawable, offset);
+                }
+            }
+
+        }
+
+        function point_in_asteroid_image(x, y, asteroid, offset) {
             var intersections = 0;
 
             var c_theta = Math.cos(asteroid.angle);
             var s_theta = Math.sin(asteroid.angle);
+
+            asteroid.x += offset.x;
+            asteroid.y += offset.y;
+
+            if (Math.abs(x - asteroid.x) > game_width / 2.0)
+                x -= Math.sign(x - asteroid.x);
+            if (Math.abs(y - asteroid.y) > game_height / 2.0)
+                y -= Math.sign(y - asteroid.y);
 
             var v_old = {
                 x: asteroid.x + c_theta * asteroid.vertices[0].x - s_theta * asteroid.vertices[0].y,
@@ -398,6 +512,40 @@
             }
 
             return intersections % 2 == 1;
+        }
+
+        function point_in_asteroid(x, y, asteroid) {
+
+            if (point_in_asteroid_image(x, y, asteroid, { x: 0.0, y: 0.0 }))
+                return true;
+
+            var buffer = asteroid.max_radius;
+
+            for (var dx = -1; dx <= 1; dx++) {
+                for (var dy = -1; dy <= 1; dy++) {
+                    if (dx == 0 && dy == 0)
+                        continue;
+
+                    var offset = { x: 0.0, y: 0.0 };
+
+                    if (dx == -1 && asteroid.x < buffer)
+                        offset.x += game_width;
+
+                    if (dx == 1 && asteroid.x > game_width - buffer)
+                        offset.x -= game_width;
+
+                    if (dy == -1 && asteroid.y < buffer)
+                        offset.y += game_height;
+
+                    if (dy == 1 && asteroid.y > game_height - buffer)
+                        offset.y -= game_height;
+
+                    if (point_in_asteroid_image(x, y, asteroid, offset))
+                        return true;
+                }
+            }
+
+            return false;
         }
 
         // NOTE(schsam): For now we will do asteroid-disk collision, but this
@@ -453,7 +601,8 @@
             var angle = 0.0;
             var d_angle_scale = 0.5;
             var d_radius_scale = 0.5;
-            
+            var max_radius = 0.0;
+
             while (angle < 2 * Math.PI) {
                 angle += 0.2 + d_angle_scale * Math.random();
 
@@ -461,6 +610,9 @@
                     break;
 
                 var radius = size + d_radius_scale * size * (Math.random() - 0.5);
+
+                if (radius > max_radius)
+                    max_radius = radius;
 
                 vertices.push({
                     x: Math.cos(angle) * radius,
@@ -472,31 +624,17 @@
                 {
                     x: position.x, y: position.y,
                     angle: 0.0,
-                    vx: velocity_scale * (Math.random() - 0.5),
-                    vy: velocity_scale * (Math.random() - 0.5),
-                    omega: omega_scale * (Math.random() - 0.5),
+                    vx: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5),
+                    vy: game_parameters.asteroid_velocity_scale * (Math.random() - 0.5),
+                    omega: game_parameters.asteroid_omega_scale * (Math.random() - 0.5),
                     vertices: vertices,
                     size: size,
-                    health: size
+                    health: size,
+                    max_radius: max_radius
                 });
         }
 
         var asteroids = [];
-
-        var velocity_scale = 0.2;
-        var omega_scale = 0.005;
-
-        for (var i = 0; i < 1; i++) {
-
-            var position = {
-                x: game_width * Math.random(),
-                y: game_height * Math.random()
-            };
-
-            var base_radius = 100 + Math.random() * 60;
-
-            create_asteroid(position, base_radius);
-        }
 
         // BULLETS
         var bullet_graphic = new Image();
@@ -525,8 +663,49 @@
             graphics.restore();
 
         }
-
+        
         bullets = [];
+
+        /* INITIALIZATION CODE */
+        function initialize_game_data() {
+            if (!ship_graphic_loaded) {
+                requestAnimFrame(initialize_game_data);
+                return;
+            }
+
+            game_score = 0;
+
+            ships = [];
+            asteroids = [];
+            selected_ships = [];
+            bullets = [];
+
+            for (var i = 0; i < 5; i++) {
+                ships.push(
+                    {
+                        x: game_width / 2.0 + 200 * Math.random() - 100.0,
+                        y: game_height / 2.0 + 200 * Math.random() - 100.0,
+                        angle: 0.0,
+                        target: { x: 0, y: 0, active: false, command_id: 0 },
+                        last_fired: (new Date()).getTime(),
+                        max_radius: ship_graphic.radius
+                    });
+            }
+
+            for (var i = 0; i < 1; i++) {
+
+                var position = {
+                    x: game_width * Math.random(),
+                    y: game_height * Math.random()
+                };
+
+                var base_radius = 100 + Math.random() * 60;
+
+                create_asteroid(position, base_radius);
+            }
+
+            game_loop();
+        }
 
         /* RENDER / UPDATE CODE */
         function draw_game() {
@@ -547,7 +726,7 @@
             }
 
             for (var i = 0; i < asteroids.length; i++) {
-                draw_asteroid(asteroids[i]);
+                draw_periodic(asteroids[i], draw_asteroid);
             }
 
             for (var i = 0; i < bullets.length; i++) {
@@ -558,93 +737,52 @@
                 draw_mouse();
         }
 
-        function update_game(dt) {
-            var ship_fire_rate = 200;
-            var ship_speed = 0.3;
-            var min_ship_to_target = 5.0;
-            var ship_attack_range = 400;
-            var bullet_speed = 0.5;
+        var game_parameters = {
+            ship_fire_rate: 200,
+            ship_speed: 0.3,
+            min_ship_to_target: 5.0,
+            ship_attack_range: 400,
+            bullet_speed: 0.5,
+            asteroid_velocity_scale: 0.2,
+            asteroid_omega_scale: 0.005 
+        };
 
+        function update_game(dt) {
             // SHIP TO TARGET LOGIC
             for (var i = 0; i < ships.length; i++) {
-                if (ships[i].target.active && ships[i].target.mode == "move") {
-                    var dx = ships[i].target.x - ships[i].x;
-                    var dy = ships[i].target.y - ships[i].y;
-
-                    if (Math.abs(dx) > game_width / 2.0)
-                        dx -= Math.sign(dx) * game_width;
-                    if (Math.abs(dy) > game_height / 2.0)
-                        dy -= Math.sign(dy) * game_height;
-
-                    var norm = Math.sqrt(dx * dx + dy * dy);
-
-                    if (norm < ship_speed * dt)
-                        norm = ship_speed * dt;
-
-                    if (norm < min_ship_to_target) {
-                        ships[i].target.active = false;
-                    } else {
-                        ships[i].x += dx / norm * ship_speed * dt;
-                        ships[i].y += dy / norm * ship_speed * dt;
-
-                        if (ships[i].x > game_width)
-                            ships[i].x -= game_width;
-                        if (ships[i].x < 0)
-                            ships[i].x += game_width;
-                        if (ships[i].y > game_height)
-                            ships[i].y -= game_height;
-                        if (ships[i].y < 0)
-                            ships[i].y += game_height;
-
-                        ships[i].angle = Math.atan2(dy, dx) + Math.PI/2.0;
-                    }
-                }
+                if (ships[i].target.active && ships[i].target.mode == "move")
+                    ships[i] = move(ships[i]);
 
                 if (ships[i].target.active && ships[i].target.mode == "attack") {
                     var target = asteroids[ships[i].target.asteroid];
 
-                    var dx = target.x - ships[i].x;
-                    var dy = target.y - ships[i].y;
+                    ships[i] = attack(ships[i], target);
+                }
 
-                    if (Math.abs(dx) > game_width / 2.0)
-                        dx -= Math.sign(dx) * game_width;
-                    if (Math.abs(dy) > game_height / 2.0)
-                        dy -= Math.sign(dy) * game_height;
+                if (ships[i].target.active && ships[i].target.mode == "attack-move") {
 
-                    var norm = Math.sqrt(dx * dx + dy * dy);
+                    target = null;
 
-                    if (norm > ship_attack_range) {
-                        ships[i].x += dx / norm * ship_speed * dt;
-                        ships[i].y += dy / norm * ship_speed * dt;
+                    for (var j = 0; j < asteroids.length; j++) {
+                        var norm = Math.sqrt(
+                            (ships[i].x - asteroids[j].x) * (ships[i].x - asteroids[j].x) +
+                            (ships[i].y - asteroids[j].y) * (ships[i].y - asteroids[j].y));
 
-                        if (ships[i].x > game_width)
-                            ships[i].x -= game_width;
-                        if (ships[i].x < 0)
-                            ships[i].x += game_width;
-                        if (ships[i].y > game_height)
-                            ships[i].y -= game_height;
-                        if (ships[i].y < 0)
-                            ships[i].y += game_height;
-
-                        ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
-                    } else {
-                        ships[i].angle = Math.atan2(dy, dx) + Math.PI / 2.0;
-
-                        if ((new Date()).getTime() - ships[i].last_fired > ship_fire_rate) {
-                            bullets.push({
-                                x: ships[i].x + ship_graphic.radius * dx / norm,
-                                y: ships[i].y + ship_graphic.radius * dy / norm,
-                                vx: dx / norm * bullet_speed,
-                                vy: dy / norm * bullet_speed,
-                                fire_time: (new Date()).getTime()
-                            });
-
-                            ships[i].last_fired = (new Date()).getTime();
+                        if (norm < game_parameters.ship_attack_range) {
+                            target = asteroids[j];
                         }
                     }
-                }
-            }
 
+                    if (target) {
+                        ships[i] = attack(ships[i], target);
+                    } else {
+                        ships[i] = move(ships[i]);
+                    }
+
+                }
+
+            }
+        
             // SHIP SHIP OVERLAP
             var ship_repulsion_scale = 1.0;
             var goal_separation_radius = ship_graphic.radius * 3;
@@ -662,7 +800,8 @@
                         ships[j].x -= (1.0 - norm / goal_separation_radius) * dx / norm * dt * ship_repulsion_scale;
                         ships[j].y -= (1.0 - norm / goal_separation_radius) * dy / norm * dt * ship_repulsion_scale;
 
-                        if (ships[i].target.mode == "move" && ships[i].target.command_id == ships[j].target.command_id) {
+                        if ((ships[i].target.mode == "move" || ships[i].target.mode == "attack-move") &&
+                            ships[i].target.command_id == ships[j].target.command_id) {
                             ships[i].target.active = ships[i].target.active && ships[j].target.active;
                             ships[j].target.active = ships[i].target.active && ships[j].target.active;
                         }
@@ -758,7 +897,7 @@
 
                             game_score += Math.floor(asteroid_radius);
 
-                            document.getElementById("score").innerHTML = "<h1>$ " + game_score + "</h1>";
+                            document.getElementById("score").innerHTML = "<h1>" + game_score + "</h1>";
                         }
 
                         break;
@@ -774,7 +913,10 @@
             var ship_select_radius = Math.sqrt(ship_graphic.width * ship_graphic.width + ship_graphic.height * ship_graphic.height) / 2.0;
 
             if (mouse.is_clicked == 0 && mouse.mode == "select") {
-                selected_ships = [];
+
+                if (!(16 in keyboard)) {
+                    selected_ships = [];
+                }
 
                 for (var i = 0; i < ships.length; i++) {
                     var dx = ships[i].x - mouse.x;
@@ -787,9 +929,35 @@
 
             if (mouse.is_clicked == 0 && mouse.mode == "attack") {
 
+                var selected_asteroid = -1;
+
+                for (var i = 0; i < asteroids.length; i++) {
+                    if (point_in_asteroid(mouse.x, mouse.y, asteroids[i]))
+                        selected_asteroid = i;
+                }
+
+                for (var i = 0; i < selected_ships.length; i++) {
+                    if (selected_asteroid < 0) {
+                        ships[selected_ships[i].id].target = {
+                            x: mouse.x, y: mouse.y,
+                            active: true, command_id: command_count,
+                            mode: "attack-move"
+                        };
+                    } else {
+                        ships[selected_ships[i].id].target = {
+                            asteroid: selected_asteroid,
+                            active: true, command_id: command_count,
+                            mode: "attack"
+                        };
+                    }
+                }
+
+                command_count++;
+
+                mouse.mode = "select";
             }
 
-            if (mouse.is_down == 0) {
+            if (mouse.is_down == 0 && mouse.is_dragging) {
                 selected_ships = []
 
                 var min_mouse_x = Math.min(mouse.x, mouse.down_x);
@@ -843,14 +1011,17 @@
                     }
                 }
 
-                mouse.mode = "select";
-
                 command_count++;
             }
+
+            if (mouse.is_clicked == 2 && mouse.mode == "attack") {
+                mouse.mode = "select";
+            }
+
 
             mouse.is_clicked = -1;
         } 
 
-        game_loop();
+        initialize_game_data();
     </script>
-</bodyoncontextmenu="return>
+</bodyoncontextmenu="return">
