@@ -207,7 +207,7 @@
 
     <div id="controls-screen">
         <h2>Controls</h2> <br />
-        <p>Mouse wraps around the screen</p>
+        <p><span>Mouse wraps around the screen</span></p>
         <p><span style="color:forestgreen">Left Click (Ship):</span> <span style="color:deepskyblue">Select</span></p>
         <p><span style="color:forestgreen">Left Drag:</span> <span style="color:deepskyblue">Select</span></p>
         <p><span style="color:yellowgreen">Shift</span> + <span style="color:forestgreen">Select:</span> <span style="color:deepskyblue">Add to Selection</span></p>
@@ -690,7 +690,8 @@
                         y: ship.y + ship_graphic.radius * dy / norm,
                         vx: dx / norm * game_parameters.bullet_speed,
                         vy: dy / norm * game_parameters.bullet_speed,
-                        fire_time: (new Date()).getTime()
+                        fire_time: (new Date()).getTime(),
+                        player: true
                     });
 
                     ship.last_fired = (new Date()).getTime();
@@ -700,6 +701,148 @@
             }
 
             return ship
+        }
+
+        /* ENEMY CODE */
+        var enemy_ships = [];
+
+        var enemy_graphic = new Image();
+        var enemy_graphic_loaded = false;
+        enemy_graphic.src = "graphics/enemy.svg";
+        enemy_graphic.radius = -1;
+        enemy_graphic.addEventListener(
+            "load",
+            function () {
+                enemy_graphic_loaded = true;
+                enemy_graphic.radius = Math.sqrt(
+                    enemy_graphic.width * enemy_graphic.width + enemy_graphic.height * enemy_graphic.height) / 2.0;
+            }
+        );
+
+        function draw_enemy(ship, offset) {
+            var color = "#1ef9de";
+            var size = 20.0;
+
+            graphics.save();
+
+            graphics.translate(ship.x + offset.x, ship.y + offset.y);
+
+            if (enemy_graphic_loaded)
+                graphics.drawImage(enemy_graphic, -enemy_graphic.width / 2.0, -enemy_graphic.height / 2.0);
+
+            graphics.restore();
+        }
+
+        function create_enemy_ship(x, y) {
+            enemy_ships.push(
+                {
+                    x: x,
+                    y: y,
+                    target: null,
+                    target_type: "",
+                    last_fired: 0,
+                    max_radius: enemy_graphic.radius
+                });
+        }
+
+        function update_enemy_ships(dt) {
+            var enemy_attack_range = 600;
+            var enemy_speed = 0.1;
+            var enemy_fire_rate = 400;
+
+            for (var i = 0; i < enemy_ships.length; i++) {
+
+                var enemy_dx = 0.0;
+                var enemy_dy = 0.0;
+
+                if (!enemy_ships[i].target) {
+                    if (ships.length > 0) {
+                        var ship_index = Math.floor(Math.random() * ships.length);
+
+                        enemy_ships[i].target = ship_index;
+                        enemy_ships[i].target_type = "ship";
+                    } else if (asteroids.length > 0) {
+                        var asteroid_index = Math.floor(Math.random() * asteroids.length);
+
+                        enemy_ships[i].target = asteroid_index;
+                        enemy_ships[i].target_type = "asteroid";
+                    } else {
+                        continue;
+                    }
+                }
+
+                var target = enemy_ships[i].target_type == "ship" ? ships[enemy_ships[i].target] : asteroids[enemy_ships[i].target];
+
+                var dx = target.x - enemy_ships[i].x;
+                var dy = target.y - enemy_ships[i].y;
+
+                if (Math.abs(dx) > game_width / 2.0)
+                    dx -= Math.sign(dx) * game_width;
+                if (Math.abs(dy) > game_height / 2.0)
+                    dy -= Math.sign(dy) * game_height;
+
+                var norm = Math.sqrt(dx * dx + dy * dy);
+
+                if (norm < enemy_attack_range) {
+                    if ((new Date()).getTime() - enemy_ships[i].last_fired > enemy_fire_rate) {
+                        bullets.push({
+                            x: enemy_ships[i].x + enemy_graphic.radius * dx / norm,
+                            y: enemy_ships[i].y + enemy_graphic.radius * dy / norm,
+                            vx: dx / norm * game_parameters.bullet_speed,
+                            vy: dy / norm * game_parameters.bullet_speed,
+                            fire_time: (new Date()).getTime(),
+                            player: false
+                        });
+
+                        enemy_ships[i].last_fired = (new Date()).getTime();
+
+                        play_ship_fire();
+                    }
+                } else {
+                    enemy_dx += dx / norm * enemy_speed * dt;
+                    enemy_dy += dy / norm * enemy_speed * dt;
+                }
+
+                for (var j = 0; j < asteroids.length; j++) {
+                    var dx = enemy_ships[i].x - asteroids[j].x;
+                    var dy = enemy_ships[i].y - asteroids[j].y;
+
+                    if (Math.abs(dx) > game_width / 2.0)
+                        dx -= Math.sign(dx) * game_width;
+                    if (Math.abs(dy) > game_height / 2.0)
+                        dy -= Math.sign(dy) * game_height;
+
+                    var norm = Math.sqrt(dx * dx + dy * dy);
+
+                    if (norm < asteroids[j].max_radius * 1.2) {
+                        enemy_dx += dx / norm * enemy_speed * dt;
+                        enemy_dy += dy / norm * enemy_speed * dt;
+                    }
+                }
+
+                enemy_ships[i].x += enemy_dx;
+                enemy_ships[i].y += enemy_dy;
+
+                if (enemy_ships[i].x > game_width)
+                    enemy_ships[i].x -= game_width;
+                if (enemy_ships[i].x < 0)
+                    enemy_ships[i].x += game_width;
+                if (enemy_ships[i].y > game_height)
+                    enemy_ships[i].y -= game_height;
+                if (enemy_ships[i].y < 0)
+                    enemy_ships[i].y += game_height;
+
+            }
+        }
+
+        function point_in_enemy(x, y, enemy) {
+            var dx = x - enemy.x;
+            var dy = y - enemy.y;
+
+            if (dx * dx + dy * dy < enemy.max_radius * enemy.max_radius)
+                return true;
+
+            return false;
         }
 
         /* ASTEROID CODE */
@@ -848,7 +991,7 @@
                 y: asteroid.y + s_theta * asteroid.vertices[0].x + c_theta * asteroid.vertices[0].y
             }
 
-            var r_sqr = ship_graphic.radius * ship_graphic.radius;
+            var r_sqr = ship.max_radius * ship.max_radius;
 
             for (var i = 1; i <= asteroid.vertices.length; i++) {
                 var index = i % asteroid.vertices.length;
@@ -971,6 +1114,19 @@
             }
         );
 
+        var enemy_bullet_graphic = new Image();
+        var enemy_bullet_graphic_loaded = false;
+        enemy_bullet_graphic.src = "graphics/enemy_bullet.svg";
+        enemy_bullet_graphic.radius = -1;
+        enemy_bullet_graphic.addEventListener(
+            "load",
+            function () {
+                enemy_bullet_graphic_loaded = true;
+                enemy_bullet_graphic.radius = Math.sqrt(enemy_bullet_graphic.width * enemy_bullet_graphic.width + enemy_bullet_graphic.height * enemy_bullet_graphic.height) / 2.0;
+            }
+        );
+
+
         function draw_bullet(bullet) {
             var color = "#1ef9de";
             var size = 20.0;
@@ -979,8 +1135,10 @@
 
             graphics.translate(bullet.x, bullet.y);
 
-            if (bullet_graphic_loaded)
+            if (bullet_graphic_loaded && bullet.player)
                 graphics.drawImage(bullet_graphic, -bullet_graphic.width / 2.0, -bullet_graphic.height / 2.0);
+            if (enemy_bullet_graphic_loaded && !bullet.player)
+                graphics.drawImage(enemy_bullet_graphic, -bullet_graphic.width / 2.0, -bullet_graphic.height / 2.0);
 
             graphics.restore();
 
@@ -1191,7 +1349,7 @@
 
         /* INITIALIZATION CODE */
         function initialize_start_screen() {
-            if (!ship_graphic_loaded) {
+            if (!(ship_graphic_loaded && enemy_graphic_loaded && bullet_graphic_loaded)) {
                 requestAnimFrame(initialize_start_screen);
                 return;
             }
@@ -1202,6 +1360,7 @@
             asteroids = [];
             selected_ships = [];
             bullets = [];
+            enemy_ships = [];
 
             for (var i = 0; i < 6; i++) {
 
@@ -1210,10 +1369,19 @@
                     y: game_height * Math.random()
                 };
 
-                var base_radius = 25 + Math.random() * 200;
+                var base_radius = game_parameters.asteroid_initial_radius;
 
-                create_asteroid(position, base_radius);
+                if (Math.random() > 0.5)
+                    base_radius /= 1.4;
+
+                if (Math.random() > 0.5)
+                    base_radius /= 1.4;
+
+                create_asteroid(position, game_parameters.asteroid_initial_radius);
             }
+
+            for (var i = 0; i < 3; i++)
+                create_enemy_ship(Math.random() * game_width, Math.random() * game_height);
 
             play_song();
 
@@ -1229,6 +1397,7 @@
             asteroids = [];
             selected_ships = [];
             bullets = [];
+            enemy_ships = [];
 
             if (game_level == 1) {
                 ships = [];
@@ -1261,7 +1430,8 @@
                     });
             }
 
-            var asteroids_per_level = [1, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 9, 10];
+            var asteroids_per_level = [1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6, 6, 7, 7, 7, 8, 9, 10];
+            var enemies_per_level = [0, 1, 0, 1, 0, 1, 2, 0, 1, 2, 2, 0, 1, 2, 0, 1, 2, 0, 1]
 
             for (var i = 0; i < asteroids_per_level[game_level - 1]; i++) {
 
@@ -1270,13 +1440,28 @@
                     y: game_height * Math.random()
                 };
 
-                while (Math.abs(position.x - game_width / 2.0) < 100.0)
+                while (Math.abs(position.x - game_width / 2.0) < 200.0)
                     position.x = game_width * Math.random();
 
-                while (Math.abs(position.y - game_height / 2.0) < 100.0)
+                while (Math.abs(position.y - game_height / 2.0) < 200.0)
                     position.y = game_height * Math.random();
 
                 create_asteroid(position, game_parameters.asteroid_initial_radius);
+            }
+
+            for (var i = 0; i < enemies_per_level[game_level - 1]; i++) {
+                var position = {
+                    x: game_width * Math.random(),
+                    y: game_height * Math.random()
+                };
+
+                while (Math.abs(position.x - game_width / 2.0) < 200.0)
+                    position.x = game_width * Math.random();
+
+                while (Math.abs(position.y - game_height / 2.0) < 200.0)
+                    position.y = game_height * Math.random();
+
+                create_enemy_ship(position.x ,position.y);
             }
 
             play_song();
@@ -1376,6 +1561,10 @@
                 draw_periodic(ships[i], draw_ship);
             }
 
+            for (var i = 0; i < enemy_ships.length; i++) {
+                draw_periodic(enemy_ships[i], draw_enemy);
+            }
+
             for (var i = 0; i < selected_ships.length; i++) {
                 var id = selected_ships[i].id;
 
@@ -1421,7 +1610,14 @@
                     ships[i] = move(ships[i]);
 
                 if (ships[i].target.active && ships[i].target.mode == "attack") {
-                    var target = asteroids[ships[i].target.asteroid];
+                    var target = null;
+
+
+                    if (ships[i].target.asteroid != null)
+                        target = asteroids[ships[i].target.asteroid];
+
+                    if (ships[i].target.enemy != null)
+                        target = enemy_ships[ships[i].target.enemy];
 
                     if (target)
                         ships[i] = attack(ships[i], target);
@@ -1432,12 +1628,34 @@
                     target = null;
 
                     for (var j = 0; j < asteroids.length; j++) {
-                        var norm = Math.sqrt(
-                            (ships[i].x - asteroids[j].x) * (ships[i].x - asteroids[j].x) +
-                            (ships[i].y - asteroids[j].y) * (ships[i].y - asteroids[j].y));
+                        var dx = ships[i].x - asteroids[j].x;
+                        var dy = ships[i].y - asteroids[j].y;
+
+                        if (Math.abs(dx) > game_width / 2.0)
+                            dx -= Math.sign(dx) * game_width;
+                        if (Math.abs(dy) > game_height / 2.0)
+                            dy -= Math.sign(dy) * game_height;
+
+                        var norm = Math.sqrt(dx * dx + dy * dy);
 
                         if (norm < game_parameters.ship_attack_range) {
                             target = asteroids[j];
+                        }
+                    }
+
+                    for (var j = 0; j < enemy_ships.length; j++) {
+                        var dx = ships[i].x - enemy_ships[j].x;
+                        var dy = ships[i].y - enemy_ships[j].y;
+
+                        if (Math.abs(dx) > game_width / 2.0)
+                            dx -= Math.sign(dx) * game_width;
+                        if (Math.abs(dy) > game_height / 2.0)
+                            dy -= Math.sign(dy) * game_height;
+
+                        var norm = Math.sqrt(dx * dx + dy * dy);
+
+                        if (norm < game_parameters.ship_attack_range) {
+                            target = enemy_ships[j];
                         }
                     }
 
@@ -1494,10 +1712,30 @@
                         if (selected_index >= 0)
                             selected_ships.splice(selected_index, 1);
 
+                        for (var k = 0; k < enemy_ships.length; k++) {
+                            if (enemy_ships[k].target && enemy_ships[k].target_type == "ship" && enemy_ships[k].target == i)
+                                enemy_ships[k].target = null;
+                        }
+
                         play_explosion();
                         create_particles(ships[i].x, ships[i].y, { r: 0, g: 255, b: 0 }, 25, ship_graphic.radius / 2.0);
 
                         ships.splice(i, 1);
+
+                        break;
+                    }
+                }
+            }
+
+            // ENEMY ASTEROID OVERLAP
+            for (var i = 0; i < enemy_ships.length; i++) {
+                for (var j = 0; j < asteroids.length; j++) {
+                    if (ship_asteroid_intersection(enemy_ships[i], asteroids[j])) {
+
+                        play_explosion();
+                        create_particles(enemy_ships[i].x, enemy_ships[i].y, { r: 255, g: 0, b: 0 }, 25, enemy_graphic.radius / 2.0);
+
+                        enemy_ships.splice(i, 1);
 
                         break;
                     }
@@ -1520,7 +1758,6 @@
 
                 asteroids[i].angle += dt * asteroids[i].omega;
             }
-
 
             // BULLET DYNAMICS
             var bullet_damage = 1;
@@ -1545,6 +1782,8 @@
                     continue;
                 }
 
+                var bullet_collided = false;
+
                 for (var j = 0; j < asteroids.length; j++) {
                     if (point_in_asteroid(bullets[i].x, bullets[i].y, asteroids[j])) {
                         bullets.splice(i, 1);
@@ -1557,6 +1796,11 @@
                             for (var z = 0; z < ships.length; z++)
                                 if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.asteroid == j)
                                     ships[z].target.active = false;
+
+                            for (var k = 0; k < enemy_ships.length; k++) {
+                                if (enemy_ships[k].target && enemy_ships[k].target_type == "asteroid" && enemy_ships[k].target == j)
+                                    enemy_ships[k].target = null;
+                            }
 
                             var asteroid_radius = asteroids[j].size;
                             var pos = { x: asteroids[j].x, y: asteroids[j].y };
@@ -1574,10 +1818,68 @@
                             document.getElementById("score").innerHTML = "<h1>" + game_score + "</h1>";
                         }
 
+                        bullet_collided = true;
                         break;
                     }
                 }
+
+                if (!bullet_collided) {
+                    for (var j = 0; j < enemy_ships.length; j++) {
+                        if (bullets[i].player && point_in_enemy(bullets[i].x, bullets[i].y, enemy_ships[j])) {
+                            bullets.splice(i, 1);
+
+                            play_explosion();
+                            create_particles(enemy_ships[j].x, enemy_ships[j].y, { r: 255, g: 0, b: 0 }, 35, enemy_ships[j].max_radius);
+
+                            for (var z = 0; z < ships.length; z++)
+                                if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.enemy == j)
+                                    ships[z].target.active = false;
+
+                            enemy_ships.splice(j, 1);
+
+                            game_score += 1000;
+
+                            document.getElementById("score").innerHTML = "<h1>" + game_score + "</h1>";
+
+                            bullet_collided = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!bullet_collided) {
+                    for (var j = 0; j < ships.length; j++) {
+                        if (!(bullets[i].player) && point_in_enemy(bullets[i].x, bullets[i].y, ships[j])) {
+                            bullets.splice(i, 1);
+
+                            play_explosion();
+                            create_particles(ships[j].x, ships[j].y, { r: 0, g: 255, b: 0 }, 35, ships[j].max_radius);
+
+                            var selected_index = -1;
+
+                            for (var k = 0; k < selected_ships.length; k++) {
+                                if (selected_ships[k].id == j)
+                                    selected_index = k;
+                                if (selected_ships[k].id > j)
+                                    selected_ships[k].id--;
+                            }
+
+                            if (selected_index >= 0)
+                                selected_ships.splice(selected_index, 1);
+
+                            for (var z = 0; z < enemy_ships.length; z++)
+                                if (enemy_ships[z].target != null && ships[z].target_type == "ship" && ships[z].target == j)
+                                    enemy_ships[z].target = null;
+
+                            ships.splice(j, 1);
+
+                            break;
+                        }
+                    }
+                }
             }
+
+            update_enemy_ships(dt);
 
             update_particles(dt);
 
@@ -1644,6 +1946,13 @@
                         selected_asteroid = i;
                 }
 
+                var selected_enemy = -1;
+
+                for (var i = 0; i < enemy_ships.length; i++) {
+                    if (point_in_enemy(mouse.x, mouse.y, enemy_ships[i]))
+                        elected_enemy = i;
+                }
+
                 for (var i = 0; i < selected_ships.length; i++) {
                     if (selected_asteroid < 0) {
                         ships[selected_ships[i].id].target = {
@@ -1651,9 +1960,17 @@
                             active: true, command_id: command_count,
                             mode: "attack-move"
                         };
-                    } else {
+                    } else if (selected_asteroid > 0) {
                         ships[selected_ships[i].id].target = {
                             asteroid: selected_asteroid,
+                            enemy: null,
+                            active: true, command_id: command_count,
+                            mode: "attack"
+                        };
+                    } else if (selected_enemy > 0) {
+                        ships[selected_ships[i].id].target = {
+                            asteroid: null,
+                            enemy: selected_enemy,
                             active: true, command_id: command_count,
                             mode: "attack"
                         };
@@ -1741,24 +2058,39 @@
                         selected_asteroid = i;
                 }
 
+                var selected_enemy = -1;
+
+                for (var i = 0; i < enemy_ships.length; i++) {
+                    if (point_in_enemy(mouse.x, mouse.y, enemy_ships[i]))
+                        selected_enemy = i;
+                }
+
                 for (var i = 0; i < selected_ships.length; i++) {
-                    if (selected_asteroid < 0) {
+                    if (selected_asteroid < 0 && selected_enemy < 0) {
                         ships[selected_ships[i].id].target = {
                             x: mouse.x, y: mouse.y,
                             active: true, command_id: command_count,
                             mode: "move"
                         };
 
-                    } else {
+                    } else if (selected_asteroid >= 0) {
                         ships[selected_ships[i].id].target = {
                             asteroid: selected_asteroid,
+                            enemy: null,
+                            active: true, command_id: command_count,
+                            mode: "attack"
+                        };
+                    } else if (selected_enemy >= 0) {
+                        ships[selected_ships[i].id].target = {
+                            asteroid: null,
+                            enemy: selected_enemy,
                             active: true, command_id: command_count,
                             mode: "attack"
                         };
                     }
                 }
 
-                if (selected_asteroid < 0)
+                if (selected_asteroid < 0 && selected_enemy < 0)
                     create_click_marker(mouse.x, mouse.y, { r: 0, g: 255, b: 0 });
 
                 command_count++;
