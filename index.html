@@ -486,7 +486,6 @@
                     }
                 }
 
-                console.log("blah");
                 mouse.is_locked = false;
 
                 if (game_state == "play") {
@@ -1340,8 +1339,6 @@
             while (current_song == index)
                 index = Math.floor(Math.random() * background_music.length);
 
-            console.log(index);
-
             if(music_enabled)
                 background_music[index].play();
             current_song = index;
@@ -1461,7 +1458,7 @@
                 while (Math.abs(position.y - game_height / 2.0) < 200.0)
                     position.y = game_height * Math.random();
 
-                create_enemy_ship(position.x ,position.y);
+                create_enemy_ship(position.x, position.y);
             }
 
             play_song();
@@ -1506,10 +1503,8 @@
 
         function create_dummy_scores() {
             load_high_scores();
-            console.log(high_score_list);
 
             if (high_score_list.length == 0) {
-                console.log("blah");
                 high_score_list.push({ name: "Can", score: 5000 });
                 high_score_list.push({ name: "You", score: 3000 });
                 high_score_list.push({ name: "Beat", score: 2000 });
@@ -1713,8 +1708,12 @@
                             selected_ships.splice(selected_index, 1);
 
                         for (var k = 0; k < enemy_ships.length; k++) {
-                            if (enemy_ships[k].target && enemy_ships[k].target_type == "ship" && enemy_ships[k].target == i)
+
+                            if (enemy_ships[k].target != null && enemy_ships[k].target_type == "ship" && enemy_ships[k].target == i)
                                 enemy_ships[k].target = null;
+                            else if (enemy_ships[k].target != null && enemy_ships[k].target_type == "ship" && enemy_ships[k].target > i)
+                                enemy_ships[k].target--;
+
                         }
 
                         play_explosion();
@@ -1734,6 +1733,14 @@
 
                         play_explosion();
                         create_particles(enemy_ships[i].x, enemy_ships[i].y, { r: 255, g: 0, b: 0 }, 25, enemy_graphic.radius / 2.0);
+
+                        for (var z = 0; z < ships.length; z++) {
+                            if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.enemy == j)
+                                ships[z].target.active = false;
+                            if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.enemy > j)
+                                ships[z].target.asteroid--;
+
+                        }
 
                         enemy_ships.splice(i, 1);
 
@@ -1793,13 +1800,20 @@
                         if (asteroids[j].health < 0) {
                             play_explosion();
 
-                            for (var z = 0; z < ships.length; z++)
+                            for (var z = 0; z < ships.length; z++) {
                                 if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.asteroid == j)
                                     ships[z].target.active = false;
+                                if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.asteroid > j)
+                                    ships[z].target.asteroid--;
+
+                            }
 
                             for (var k = 0; k < enemy_ships.length; k++) {
                                 if (enemy_ships[k].target && enemy_ships[k].target_type == "asteroid" && enemy_ships[k].target == j)
                                     enemy_ships[k].target = null;
+                                if (enemy_ships[k].target && enemy_ships[k].target_type == "asteroid" && enemy_ships[k].target > j)
+                                    enemy_ships[k].target--;
+
                             }
 
                             var asteroid_radius = asteroids[j].size;
@@ -1831,9 +1845,12 @@
                             play_explosion();
                             create_particles(enemy_ships[j].x, enemy_ships[j].y, { r: 255, g: 0, b: 0 }, 35, enemy_ships[j].max_radius);
 
-                            for (var z = 0; z < ships.length; z++)
+                            for (var z = 0; z < ships.length; z++) {
                                 if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.enemy == j)
                                     ships[z].target.active = false;
+                                if (ships[z].target.active && ships[z].target.mode == "attack" && ships[z].target.enemy > j)
+                                    ships[z].target.enemy--;
+                            }
 
                             enemy_ships.splice(j, 1);
 
@@ -1867,9 +1884,12 @@
                             if (selected_index >= 0)
                                 selected_ships.splice(selected_index, 1);
 
-                            for (var z = 0; z < enemy_ships.length; z++)
-                                if (enemy_ships[z].target != null && ships[z].target_type == "ship" && ships[z].target == j)
+                            for (var z = 0; z < enemy_ships.length; z++) {
+                                if (enemy_ships[z].target != null && enemy_ships[z].target_type == "ship" && enemy_ships[z].target == j)
                                     enemy_ships[z].target = null;
+                                else if (enemy_ships[z].target != null && enemy_ships[z].target_type == "ship" && enemy_ships[z].target > j)
+                                    enemy_ships[z].target--;
+                            }
 
                             ships.splice(j, 1);
 
